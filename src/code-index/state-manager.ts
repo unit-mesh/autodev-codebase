@@ -1,4 +1,4 @@
-import * as vscode from "vscode"
+import { IEventBus } from "../abstractions/core"
 
 export type IndexingState = "Standby" | "Indexing" | "Indexed" | "Error"
 
@@ -8,11 +8,16 @@ export class CodeIndexStateManager {
 	private _processedItems: number = 0
 	private _totalItems: number = 0
 	private _currentItemUnit: string = "blocks"
-	private _progressEmitter = new vscode.EventEmitter<ReturnType<typeof this.getCurrentStatus>>()
+	private eventBus: IEventBus
+
+	constructor(eventBus: IEventBus) {
+		this.eventBus = eventBus
+		this.onProgressUpdate = (handler) => this.eventBus.on('progress-update', handler)
+	}
 
 	// --- Public API ---
 
-	public readonly onProgressUpdate = this._progressEmitter.event
+	public readonly onProgressUpdate: (handler: (data: ReturnType<typeof this.getCurrentStatus>) => void) => () => void
 
 	public get state(): IndexingState {
 		return this._systemStatus
@@ -51,7 +56,7 @@ export class CodeIndexStateManager {
 				if (newState === "Error" && message === undefined) this._statusMessage = "An error occurred."
 			}
 
-			this._progressEmitter.fire(this.getCurrentStatus())
+			this.eventBus.emit('progress-update', this.getCurrentStatus())
 		}
 	}
 
@@ -73,7 +78,7 @@ export class CodeIndexStateManager {
 
 			// Only fire update if status, message or progress actually changed
 			if (oldStatus !== this._systemStatus || oldMessage !== this._statusMessage || progressChanged) {
-				this._progressEmitter.fire(this.getCurrentStatus())
+				this.eventBus.emit('progress-update', this.getCurrentStatus())
 			}
 		}
 	}
@@ -104,12 +109,12 @@ export class CodeIndexStateManager {
 			this._statusMessage = message
 
 			if (oldStatus !== this._systemStatus || oldMessage !== this._statusMessage || progressChanged) {
-				this._progressEmitter.fire(this.getCurrentStatus())
+				this.eventBus.emit('progress-update', this.getCurrentStatus())
 			}
 		}
 	}
 
 	public dispose(): void {
-		this._progressEmitter.dispose()
+		// EventBus cleanup is handled by the platform implementation
 	}
 }

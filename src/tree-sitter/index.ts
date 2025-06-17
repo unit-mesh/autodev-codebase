@@ -1,10 +1,16 @@
-import * as fs from "fs/promises"
-import * as path from "path"
-import { listFiles } from "../glob/list-files"
 import { LanguageParser, loadRequiredLanguageParsers } from "./languageParser"
-import { fileExistsAtPath } from "../../utils/fs"
 import { parseMarkdown } from "./markdownParser"
-import { RooIgnoreController } from "../../core/ignore/RooIgnoreController"
+import { IFileSystem } from "../abstractions/core"
+import { IWorkspace, IPathUtils } from "../abstractions/workspace"
+
+/**
+ * Dependencies for tree-sitter parsing functions
+ */
+export interface TreeSitterDependencies {
+	fileSystem: IFileSystem
+	workspace: IWorkspace
+	pathUtils: IPathUtils
+}
 
 // Private constant
 const DEFAULT_MIN_COMPONENT_LINES_VALUE = 4
@@ -94,16 +100,16 @@ export { extensions }
 
 export async function parseSourceCodeDefinitionsForFile(
 	filePath: string,
-	rooIgnoreController?: RooIgnoreController,
+	dependencies: TreeSitterDependencies,
 ): Promise<string | undefined> {
 	// check if the file exists
-	const fileExists = await fileExistsAtPath(path.resolve(filePath))
+	const fileExists = await dependencies.fileSystem.exists(filePath)
 	if (!fileExists) {
 		return "This file does not exist or you do not have permission to access it."
 	}
 
 	// Get file extension to determine parser
-	const ext = path.extname(filePath).toLowerCase()
+	const ext = dependencies.pathUtils.extname(filePath).toLowerCase()
 	// Check if the file extension is supported
 	if (!extensions.includes(ext)) {
 		return undefined
@@ -112,12 +118,13 @@ export async function parseSourceCodeDefinitionsForFile(
 	// Special case for markdown files
 	if (ext === ".md" || ext === ".markdown") {
 		// Check if we have permission to access this file
-		if (rooIgnoreController && !rooIgnoreController.validateAccess(filePath)) {
+		if (dependencies.workspace.shouldIgnore(filePath)) {
 			return undefined
 		}
 
 		// Read file content
-		const fileContent = await fs.readFile(filePath, "utf8")
+		const fileContentArray = await dependencies.fileSystem.readFile(filePath)
+		const fileContent = new TextDecoder().decode(fileContentArray)
 
 		// Split the file content into individual lines
 		const lines = fileContent.split("\n")
@@ -129,7 +136,7 @@ export async function parseSourceCodeDefinitionsForFile(
 		const markdownDefinitions = processCaptures(markdownCaptures, lines, "markdown")
 
 		if (markdownDefinitions) {
-			return `# ${path.basename(filePath)}\n${markdownDefinitions}`
+			return `# ${dependencies.pathUtils.basename(filePath)}\n${markdownDefinitions}`
 		}
 		return undefined
 	}
@@ -138,9 +145,9 @@ export async function parseSourceCodeDefinitionsForFile(
 	const languageParsers = await loadRequiredLanguageParsers([filePath])
 
 	// Parse the file if we have a parser for it
-	const definitions = await parseFile(filePath, languageParsers, rooIgnoreController)
+	const definitions = await parseFile(filePath, languageParsers, dependencies)
 	if (definitions) {
-		return `# ${path.basename(filePath)}\n${definitions}`
+		return `# ${dependencies.pathUtils.basename(filePath)}\n${definitions}`
 	}
 
 	return undefined
@@ -149,31 +156,31 @@ export async function parseSourceCodeDefinitionsForFile(
 // TODO: implement caching behavior to avoid having to keep analyzing project for new tasks.
 export async function parseSourceCodeForDefinitionsTopLevel(
 	dirPath: string,
-	rooIgnoreController?: RooIgnoreController,
+	dependencies: TreeSitterDependencies,
 ): Promise<string> {
 	// check if the path exists
-	const dirExists = await fileExistsAtPath(path.resolve(dirPath))
+	const dirExists = await dependencies.fileSystem.exists(dirPath)
 	if (!dirExists) {
 		return "This directory does not exist or you do not have permission to access it."
 	}
 
-	// Get all files at top level (not gitignored)
-	const [allFiles, _] = await listFiles(dirPath, false, 200)
+	// Get all files at top level using workspace
+	const allFiles = await dependencies.workspace.findFiles("**/*", undefined)
 
 	let result = ""
 
 	// Separate files to parse and remaining files
-	const { filesToParse } = separateFiles(allFiles)
+	const { filesToParse } = separateFiles(allFiles, dependencies.pathUtils)
 
-	// Filter filepaths for access if controller is provided
-	const allowedFilesToParse = rooIgnoreController ? rooIgnoreController.filterPaths(filesToParse) : filesToParse
+	// Filter filepaths for access using workspace
+	const allowedFilesToParse = filesToParse.filter(file => !dependencies.workspace.shouldIgnore(file))
 
 	// Separate markdown files from other files
 	const markdownFiles: string[] = []
 	const otherFiles: string[] = []
 
 	for (const file of allowedFilesToParse) {
-		const ext = path.extname(file).toLowerCase()
+		const ext = dependencies.pathUtils.extname(file).toLowerCase()
 		if (ext === ".md" || ext === ".markdown") {
 			markdownFiles.push(file)
 		} else {
@@ -187,13 +194,14 @@ export async function parseSourceCodeForDefinitionsTopLevel(
 	// Process markdown files
 	for (const file of markdownFiles) {
 		// Check if we have permission to access this file
-		if (rooIgnoreController && !rooIgnoreController.validateAccess(file)) {
+		if (dependencies.workspace.shouldIgnore(file)) {
 			continue
 		}
 
 		try {
 			// Read file content
-			const fileContent = await fs.readFile(file, "utf8")
+			const fileContentArray = await dependencies.fileSystem.readFile(file)
+			const fileContent = new TextDecoder().decode(fileContentArray)
 
 			// Split the file content into individual lines
 			const lines = fileContent.split("\n")
@@ -205,7 +213,8 @@ export async function parseSourceCodeForDefinitionsTopLevel(
 			const markdownDefinitions = processCaptures(markdownCaptures, lines, "markdown")
 
 			if (markdownDefinitions) {
-				result += `# ${path.relative(dirPath, file).toPosix()}\n${markdownDefinitions}\n`
+				const relativePath = dependencies.pathUtils.relative(dirPath, file)
+				result += `# ${relativePath}\n${markdownDefinitions}\n`
 			}
 		} catch (error) {
 			console.log(`Error parsing markdown file: ${error}\n`)
@@ -214,17 +223,18 @@ export async function parseSourceCodeForDefinitionsTopLevel(
 
 	// Process other files using tree-sitter
 	for (const file of otherFiles) {
-		const definitions = await parseFile(file, languageParsers, rooIgnoreController)
+		const definitions = await parseFile(file, languageParsers, dependencies)
 		if (definitions) {
-			result += `# ${path.relative(dirPath, file).toPosix()}\n${definitions}\n`
+			const relativePath = dependencies.pathUtils.relative(dirPath, file)
+			result += `# ${relativePath}\n${definitions}\n`
 		}
 	}
 
 	return result ? result : "No source code definitions found."
 }
 
-function separateFiles(allFiles: string[]): { filesToParse: string[]; remainingFiles: string[] } {
-	const filesToParse = allFiles.filter((file) => extensions.includes(path.extname(file))).slice(0, 50) // 50 files max
+function separateFiles(allFiles: string[], pathUtils: IPathUtils): { filesToParse: string[]; remainingFiles: string[] } {
+	const filesToParse = allFiles.filter((file) => extensions.includes(pathUtils.extname(file))).slice(0, 50) // 50 files max
 	const remainingFiles = allFiles.filter((file) => !filesToParse.includes(file))
 	return { filesToParse, remainingFiles }
 }
@@ -369,22 +379,23 @@ function processCaptures(captures: any[], lines: string[], language: string): st
  *
  * @param filePath - Path to the file to parse
  * @param languageParsers - Map of language parsers
- * @param rooIgnoreController - Optional controller to check file access permissions
+ * @param dependencies - Dependencies for file system, workspace, and path operations
  * @returns A formatted string with code definitions or null if no definitions found
  */
 async function parseFile(
 	filePath: string,
 	languageParsers: LanguageParser,
-	rooIgnoreController?: RooIgnoreController,
+	dependencies: TreeSitterDependencies,
 ): Promise<string | null> {
 	// Check if we have permission to access this file
-	if (rooIgnoreController && !rooIgnoreController.validateAccess(filePath)) {
+	if (dependencies.workspace.shouldIgnore(filePath)) {
 		return null
 	}
 
 	// Read file content
-	const fileContent = await fs.readFile(filePath, "utf8")
-	const extLang = path.extname(filePath).toLowerCase().slice(1)
+	const fileContentArray = await dependencies.fileSystem.readFile(filePath)
+	const fileContent = new TextDecoder().decode(fileContentArray)
+	const extLang = dependencies.pathUtils.extname(filePath).toLowerCase().slice(1)
 
 	// Check if we have a parser for this file type
 	const { parser, query } = languageParsers[extLang] || {}

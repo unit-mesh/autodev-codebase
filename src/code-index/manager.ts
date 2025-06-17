@@ -1,19 +1,26 @@
-import * as vscode from "vscode"
-import { getWorkspacePath } from "../../utils/path"
-import { ContextProxy } from "../../core/config/ContextProxy"
 import { VectorStoreSearchResult } from "./interfaces"
-import { IndexingState } from "./interfaces/manager"
+import { IndexingState, ICodeIndexManager } from "./interfaces/manager"
 import { CodeIndexConfigManager } from "./config-manager"
 import { CodeIndexStateManager } from "./state-manager"
 import { CodeIndexServiceFactory } from "./service-factory"
 import { CodeIndexSearchService } from "./search-service"
 import { CodeIndexOrchestrator } from "./orchestrator"
 import { CacheManager } from "./cache-manager"
-import fs from "fs/promises"
+import { IConfigProvider } from "../abstractions/config"
+import { IFileSystem, IStorage, IEventBus } from "../abstractions/core"
+import { IWorkspace, IPathUtils } from "../abstractions/workspace"
 import ignore from "ignore"
-import path from "path"
 
-export class CodeIndexManager {
+export interface CodeIndexManagerDependencies {
+	fileSystem: IFileSystem
+	storage: IStorage
+	eventBus: IEventBus
+	workspace: IWorkspace
+	pathUtils: IPathUtils
+	configProvider: IConfigProvider
+}
+
+export class CodeIndexManager implements ICodeIndexManager {
 	// --- Singleton Implementation ---
 	private static instances = new Map<string, CodeIndexManager>() // Map workspace path to instance
 
@@ -25,15 +32,15 @@ export class CodeIndexManager {
 	private _searchService: CodeIndexSearchService | undefined
 	private _cacheManager: CacheManager | undefined
 
-	public static getInstance(context: vscode.ExtensionContext): CodeIndexManager | undefined {
-		const workspacePath = getWorkspacePath() // Assumes single workspace for now
+	public static getInstance(dependencies: CodeIndexManagerDependencies): CodeIndexManager | undefined {
+		const workspacePath = dependencies.workspace.getRootPath()
 
 		if (!workspacePath) {
 			return undefined
 		}
 
 		if (!CodeIndexManager.instances.has(workspacePath)) {
-			CodeIndexManager.instances.set(workspacePath, new CodeIndexManager(workspacePath, context))
+			CodeIndexManager.instances.set(workspacePath, new CodeIndexManager(workspacePath, dependencies))
 		}
 		return CodeIndexManager.instances.get(workspacePath)!
 	}
@@ -46,13 +53,13 @@ export class CodeIndexManager {
 	}
 
 	private readonly workspacePath: string
-	private readonly context: vscode.ExtensionContext
+	private readonly dependencies: CodeIndexManagerDependencies
 
 	// Private constructor for singleton pattern
-	private constructor(workspacePath: string, context: vscode.ExtensionContext) {
+	private constructor(workspacePath: string, dependencies: CodeIndexManagerDependencies) {
 		this.workspacePath = workspacePath
-		this.context = context
-		this._stateManager = new CodeIndexStateManager()
+		this.dependencies = dependencies
+		this._stateManager = new CodeIndexStateManager(dependencies.eventBus)
 	}
 
 	// --- Public API ---
@@ -97,10 +104,11 @@ export class CodeIndexManager {
 	 * Must be called before using any other methods.
 	 * @returns Object indicating if a restart is needed
 	 */
-	public async initialize(contextProxy: ContextProxy): Promise<{ requiresRestart: boolean }> {
+	public async initialize(): Promise<{ requiresRestart: boolean }> {
 		// 1. ConfigManager Initialization and Configuration Loading
 		if (!this._configManager) {
-			this._configManager = new CodeIndexConfigManager(contextProxy)
+			this._configManager = new CodeIndexConfigManager(this.dependencies.configProvider)
+			await this._configManager.initialize()
 		}
 		// Load configuration once to get current state and restart requirements
 		const { requiresRestart } = await this._configManager.loadConfiguration()
@@ -115,7 +123,11 @@ export class CodeIndexManager {
 
 		// 3. CacheManager Initialization
 		if (!this._cacheManager) {
-			this._cacheManager = new CacheManager(this.context, this.workspacePath)
+			this._cacheManager = new CacheManager(
+				this.dependencies.fileSystem, 
+				this.dependencies.storage, 
+				this.workspacePath
+			)
 			await this._cacheManager.initialize()
 		}
 
@@ -136,19 +148,14 @@ export class CodeIndexManager {
 			)
 
 			const ignoreInstance = ignore()
-			const ignorePath = path.join(getWorkspacePath(), ".gitignore")
-			try {
-				const content = await fs.readFile(ignorePath, "utf8")
-				ignoreInstance.add(content)
-				ignoreInstance.add(".gitignore")
-			} catch (error) {
-				// Should never happen: reading file failed even though it exists
-				console.error("Unexpected error loading .gitignore:", error)
-			}
+			const ignoreRules = this.dependencies.workspace.getIgnoreRules()
+			ignoreInstance.add(ignoreRules)
 
-			// (Re)Create shared service instances
+			// (Re)Create shared service instances  
+			// Note: Service factory still needs to be refactored to remove VSCode dependencies
+			// For now, we'll pass null as context - this will need to be updated when service factory is refactored
 			const { embedder, vectorStore, scanner, fileWatcher } = this._serviceFactory.createServices(
-				this.context,
+				null as any, // TODO: Remove when service factory is refactored
 				this._cacheManager,
 				ignoreInstance,
 			)
@@ -185,6 +192,15 @@ export class CodeIndexManager {
 		}
 
 		return { requiresRestart }
+	}
+
+	/**
+	 * Loads configuration from storage (interface implementation)
+	 */
+	public async loadConfiguration(): Promise<void> {
+		if (this._configManager) {
+			await this._configManager.loadConfiguration()
+		}
 	}
 
 	/**
@@ -240,12 +256,12 @@ export class CodeIndexManager {
 		return this._stateManager.getCurrentStatus()
 	}
 
-	public async searchIndex(query: string, directoryPrefix?: string): Promise<VectorStoreSearchResult[]> {
+	public async searchIndex(query: string, limit: number = 10): Promise<VectorStoreSearchResult[]> {
 		if (!this.isFeatureEnabled) {
 			return []
 		}
 		this.assertInitialized()
-		return this._searchService!.searchIndex(query, directoryPrefix)
+		return this._searchService!.searchIndex(query, undefined, limit)
 	}
 
 	/**

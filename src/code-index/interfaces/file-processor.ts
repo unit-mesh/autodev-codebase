@@ -1,4 +1,3 @@
-import * as vscode from "vscode"
 import { PointStruct } from "./vector-store"
 
 /**
@@ -50,7 +49,7 @@ export interface IDirectoryScanner {
 /**
  * Interface for file watcher
  */
-export interface IFileWatcher extends vscode.Disposable {
+export interface IFileWatcher {
 	/**
 	 * Initializes the file watcher
 	 */
@@ -60,22 +59,22 @@ export interface IFileWatcher extends vscode.Disposable {
 	 * Event emitted when a batch of files begins processing.
 	 * The event payload is an array of file paths included in the batch.
 	 */
-	readonly onDidStartBatchProcessing: vscode.Event<string[]>
+	readonly onDidStartBatchProcessing: (handler: (data: string[]) => void) => () => void
 
 	/**
 	 * Event emitted to report progress during batch processing.
 	 */
-	readonly onBatchProgressUpdate: vscode.Event<{
+	readonly onBatchProgressUpdate: (handler: (data: {
 		processedInBatch: number
 		totalInBatch: number
 		currentFile?: string
-	}>
+	}) => void) => () => void
 
 	/**
 	 * Event emitted when a batch of files has finished processing.
 	 * The event payload contains a summary of the batch operation.
 	 */
-	readonly onDidFinishBatchProcessing: vscode.Event<BatchProcessingSummary>
+	readonly onDidFinishBatchProcessing: (handler: (data: BatchProcessingSummary) => void) => () => void
 
 	/**
 	 * Processes a file
@@ -83,6 +82,11 @@ export interface IFileWatcher extends vscode.Disposable {
 	 * @returns Promise resolving to processing result
 	 */
 	processFile(filePath: string): Promise<FileProcessingResult>
+
+	/**
+	 * Disposes the file watcher and cleans up resources
+	 */
+	dispose(): void
 }
 
 export interface BatchProcessingSummary {

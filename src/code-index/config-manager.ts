@@ -1,9 +1,15 @@
-import { ApiHandlerOptions } from "../../shared/api"
-import { ContextProxy } from "../../core/config/ContextProxy"
 import { EmbedderProvider } from "./interfaces/manager"
-import { CodeIndexConfig, PreviousConfigSnapshot } from "./interfaces/config"
+import { CodeIndexConfig } from "./interfaces/config"
 import { SEARCH_MIN_SCORE } from "./constants"
 import { getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
+import { 
+	IConfigProvider, 
+	EmbedderConfig, 
+	VectorStoreConfig, 
+	SearchConfig,
+	ConfigSnapshot,
+	ApiHandlerOptions 
+} from "../abstractions/config"
 
 /**
  * Manages configuration state and validation for the code indexing feature.
@@ -20,79 +26,51 @@ export class CodeIndexConfigManager {
 	private qdrantApiKey?: string
 	private searchMinScore?: number
 
-	constructor(private readonly contextProxy: ContextProxy) {
+	constructor(private readonly configProvider: IConfigProvider) {
 		// Initialize with current configuration to avoid false restart triggers
-		this._loadAndSetConfiguration()
+		// Note: initialization will be done async via initialize() method
+	}
+
+	/**
+	 * Initialize the configuration manager asynchronously
+	 */
+	public async initialize(): Promise<void> {
+		await this._loadAndSetConfiguration()
 	}
 
 	/**
 	 * Private method that handles loading configuration from storage and updating instance variables.
 	 * This eliminates code duplication between initializeWithCurrentConfig() and loadConfiguration().
 	 */
-	private _loadAndSetConfiguration(): void {
-		// Load configuration from storage
-		const codebaseIndexConfig = this.contextProxy?.getGlobalState("codebaseIndexConfig") ?? {
-			codebaseIndexEnabled: false,
-			codebaseIndexQdrantUrl: "http://localhost:6333",
-			codebaseIndexSearchMinScore: 0.4,
-			codebaseIndexEmbedderProvider: "openai",
-			codebaseIndexEmbedderBaseUrl: "",
-			codebaseIndexEmbedderModelId: "",
-		}
-
-		const {
-			codebaseIndexEnabled,
-			codebaseIndexQdrantUrl,
-			codebaseIndexEmbedderProvider,
-			codebaseIndexEmbedderBaseUrl,
-			codebaseIndexEmbedderModelId,
-		} = codebaseIndexConfig
-
-		const openAiKey = this.contextProxy?.getSecret("codeIndexOpenAiKey") ?? ""
-		const qdrantApiKey = this.contextProxy?.getSecret("codeIndexQdrantApiKey") ?? ""
-		const openAiCompatibleBaseUrl = this.contextProxy?.getGlobalState("codebaseIndexOpenAiCompatibleBaseUrl") ?? ""
-		const openAiCompatibleApiKey = this.contextProxy?.getSecret("codebaseIndexOpenAiCompatibleApiKey") ?? ""
-		const openAiCompatibleModelDimension = this.contextProxy?.getGlobalState(
-			"codebaseIndexOpenAiCompatibleModelDimension",
-		) as number | undefined
+	private async _loadAndSetConfiguration(): Promise<void> {
+		// Load configuration using the abstract config provider
+		const [embedderConfig, vectorStoreConfig, searchConfig] = await Promise.all([
+			this.configProvider.getEmbedderConfig(),
+			this.configProvider.getVectorStoreConfig(),
+			this.configProvider.getSearchConfig()
+		])
 
 		// Update instance variables with configuration
-		this.isEnabled = codebaseIndexEnabled || false
-		this.qdrantUrl = codebaseIndexQdrantUrl
-		this.qdrantApiKey = qdrantApiKey ?? ""
-		this.openAiOptions = { openAiNativeApiKey: openAiKey }
-		this.searchMinScore = SEARCH_MIN_SCORE
-
-		// Set embedder provider with support for openai-compatible
-		if (codebaseIndexEmbedderProvider === "ollama") {
-			this.embedderProvider = "ollama"
-		} else if (codebaseIndexEmbedderProvider === "openai-compatible") {
-			this.embedderProvider = "openai-compatible"
-		} else {
-			this.embedderProvider = "openai"
-		}
-
-		this.modelId = codebaseIndexEmbedderModelId || undefined
-
-		this.ollamaOptions = {
-			ollamaBaseUrl: codebaseIndexEmbedderBaseUrl,
-		}
-
-		this.openAiCompatibleOptions =
-			openAiCompatibleBaseUrl && openAiCompatibleApiKey
-				? {
-						baseUrl: openAiCompatibleBaseUrl,
-						apiKey: openAiCompatibleApiKey,
-						modelDimension: openAiCompatibleModelDimension,
-					}
-				: undefined
+		this.isEnabled = this.configProvider.isCodeIndexEnabled()
+		this.embedderProvider = embedderConfig.provider
+		this.modelId = embedderConfig.modelId
+		this.openAiOptions = embedderConfig.openAiOptions
+		this.ollamaOptions = embedderConfig.ollamaOptions
+		this.openAiCompatibleOptions = embedderConfig.openAiCompatibleOptions
+		
+		// Vector store configuration
+		this.qdrantUrl = vectorStoreConfig.qdrantUrl ?? "http://localhost:6333"
+		this.qdrantApiKey = vectorStoreConfig.qdrantApiKey ?? ""
+		
+		// Search configuration
+		this.searchMinScore = searchConfig.minScore ?? SEARCH_MIN_SCORE
 	}
 
 	/**
 	 * Loads persisted configuration from globalState.
 	 */
 	public async loadConfiguration(): Promise<{
-		configSnapshot: PreviousConfigSnapshot
+		configSnapshot: ConfigSnapshot
 		currentConfig: {
 			isEnabled: boolean
 			isConfigured: boolean
@@ -108,7 +86,7 @@ export class CodeIndexConfigManager {
 		requiresRestart: boolean
 	}> {
 		// Capture the ACTUAL previous state before loading new configuration
-		const previousConfigSnapshot: PreviousConfigSnapshot = {
+		const previousConfigSnapshot: ConfigSnapshot = {
 			enabled: this.isEnabled,
 			configured: this.isConfigured(),
 			embedderProvider: this.embedderProvider,
@@ -172,7 +150,7 @@ export class CodeIndexConfigManager {
 	/**
 	 * Determines if a configuration change requires restarting the indexing process.
 	 */
-	doesConfigChangeRequireRestart(prev: PreviousConfigSnapshot): boolean {
+	doesConfigChangeRequireRestart(prev: ConfigSnapshot): boolean {
 		const nowConfigured = this.isConfigured()
 
 		// Handle null/undefined values safely - use empty strings for consistency with loaded config

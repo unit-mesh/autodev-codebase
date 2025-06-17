@@ -1,57 +1,56 @@
 import { vitest, describe, it, expect, beforeEach } from "vitest"
 import type { Mock } from "vitest"
-import * as vscode from "vscode"
 import { createHash } from "crypto"
 import debounce from "lodash.debounce"
 import { CacheManager } from "../cache-manager"
+import { IFileSystem, IStorage } from "../../abstractions"
 
-// Mock vscode
-vitest.mock("vscode", () => ({
-	Uri: {
-		joinPath: vitest.fn(),
-	},
-	workspace: {
-		fs: {
-			readFile: vitest.fn(),
-			writeFile: vitest.fn(),
-			delete: vitest.fn(),
-		},
-	},
-}))
 
 // Mock debounce to execute immediately
 vitest.mock("lodash.debounce", () => ({ default: vitest.fn((fn) => fn) }))
 
 describe("CacheManager", () => {
-	let mockContext: vscode.ExtensionContext
+	let mockFileSystem: IFileSystem
+	let mockStorage: IStorage
 	let mockWorkspacePath: string
-	let mockCachePath: vscode.Uri
+	let mockCachePath: string
 	let cacheManager: CacheManager
 
 	beforeEach(() => {
 		// Reset all mocks
 		vitest.clearAllMocks()
 
-		// Mock context
+		// Mock workspace path and cache path
 		mockWorkspacePath = "/mock/workspace"
-		mockCachePath = { fsPath: "/mock/storage/cache.json" } as vscode.Uri
-		mockContext = {
-			globalStorageUri: { fsPath: "/mock/storage" } as vscode.Uri,
-		} as vscode.ExtensionContext
+		mockCachePath = "/mock/storage/roo-index-cache-hash.json"
 
-		// Mock Uri.joinPath
-		;(vscode.Uri.joinPath as Mock).mockReturnValue(mockCachePath)
+		// Mock file system
+		mockFileSystem = {
+			readFile: vitest.fn(),
+			writeFile: vitest.fn(),
+			exists: vitest.fn(),
+			stat: vitest.fn(),
+			readdir: vitest.fn(),
+			mkdir: vitest.fn(),
+			delete: vitest.fn(),
+		}
+
+		// Mock storage
+		mockStorage = {
+			getGlobalStorageUri: vitest.fn().mockReturnValue("/mock/storage"),
+			createCachePath: vitest.fn().mockReturnValue(mockCachePath),
+			getCacheBasePath: vitest.fn().mockReturnValue("/mock/storage"),
+		}
 
 		// Create cache manager instance
-		cacheManager = new CacheManager(mockContext, mockWorkspacePath)
+		cacheManager = new CacheManager(mockFileSystem, mockStorage, mockWorkspacePath)
 	})
 
 	describe("constructor", () => {
-		it("should correctly set up cachePath using Uri.joinPath and crypto.createHash", () => {
+		it("should correctly set up cachePath using storage.createCachePath and crypto.createHash", () => {
 			const expectedHash = createHash("sha256").update(mockWorkspacePath).digest("hex")
 
-			expect(vscode.Uri.joinPath).toHaveBeenCalledWith(
-				mockContext.globalStorageUri,
+			expect(mockStorage.createCachePath).toHaveBeenCalledWith(
 				`roo-index-cache-${expectedHash}.json`,
 			)
 		})
@@ -64,17 +63,17 @@ describe("CacheManager", () => {
 	describe("initialize", () => {
 		it("should load existing cache file successfully", async () => {
 			const mockCache = { "file1.ts": "hash1", "file2.ts": "hash2" }
-			const mockBuffer = Buffer.from(JSON.stringify(mockCache))
-			;(vscode.workspace.fs.readFile as Mock).mockResolvedValue(mockBuffer)
+			const mockBuffer = new TextEncoder().encode(JSON.stringify(mockCache))
+			;(mockFileSystem.readFile as Mock).mockResolvedValue(mockBuffer)
 
 			await cacheManager.initialize()
 
-			expect(vscode.workspace.fs.readFile).toHaveBeenCalledWith(mockCachePath)
+			expect(mockFileSystem.readFile).toHaveBeenCalledWith(mockCachePath)
 			expect(cacheManager.getAllHashes()).toEqual(mockCache)
 		})
 
 		it("should handle missing cache file by creating empty cache", async () => {
-			;(vscode.workspace.fs.readFile as Mock).mockRejectedValue(new Error("File not found"))
+			;(mockFileSystem.readFile as Mock).mockRejectedValue(new Error("File not found"))
 
 			await cacheManager.initialize()
 
@@ -90,7 +89,7 @@ describe("CacheManager", () => {
 			cacheManager.updateHash(filePath, hash)
 
 			expect(cacheManager.getHash(filePath)).toBe(hash)
-			expect(vscode.workspace.fs.writeFile).toHaveBeenCalled()
+			expect(mockFileSystem.writeFile).toHaveBeenCalled()
 		})
 
 		it("should delete hash and trigger save", () => {
@@ -101,7 +100,7 @@ describe("CacheManager", () => {
 			cacheManager.deleteHash(filePath)
 
 			expect(cacheManager.getHash(filePath)).toBeUndefined()
-			expect(vscode.workspace.fs.writeFile).toHaveBeenCalled()
+			expect(mockFileSystem.writeFile).toHaveBeenCalled()
 		})
 
 		it("should return shallow copy of hashes", () => {
@@ -126,18 +125,18 @@ describe("CacheManager", () => {
 
 			cacheManager.updateHash(filePath, hash)
 
-			expect(vscode.workspace.fs.writeFile).toHaveBeenCalledWith(mockCachePath, expect.any(Uint8Array))
+			expect(mockFileSystem.writeFile).toHaveBeenCalledWith(mockCachePath, expect.any(Uint8Array))
 
 			// Verify the saved data
 			const savedData = JSON.parse(
-				Buffer.from((vscode.workspace.fs.writeFile as Mock).mock.calls[0][1]).toString(),
+				new TextDecoder().decode((mockFileSystem.writeFile as Mock).mock.calls[0][1]),
 			)
 			expect(savedData).toEqual({ [filePath]: hash })
 		})
 
 		it("should handle save errors gracefully", async () => {
 			const consoleErrorSpy = vitest.spyOn(console, "error").mockImplementation(() => {})
-			;(vscode.workspace.fs.writeFile as Mock).mockRejectedValue(new Error("Save failed"))
+			;(mockFileSystem.writeFile as Mock).mockRejectedValue(new Error("Save failed"))
 
 			cacheManager.updateHash("test.ts", "hash")
 
@@ -155,18 +154,18 @@ describe("CacheManager", () => {
 			cacheManager.updateHash("test.ts", "hash")
 
 			// Reset the mock to ensure writeFile succeeds for clearCacheFile
-			;(vscode.workspace.fs.writeFile as Mock).mockClear()
-			;(vscode.workspace.fs.writeFile as Mock).mockResolvedValue(undefined)
+			;(mockFileSystem.writeFile as Mock).mockClear()
+			;(mockFileSystem.writeFile as Mock).mockResolvedValue(undefined)
 
 			await cacheManager.clearCacheFile()
 
-			expect(vscode.workspace.fs.writeFile).toHaveBeenCalledWith(mockCachePath, Buffer.from("{}"))
+			expect(mockFileSystem.writeFile).toHaveBeenCalledWith(mockCachePath, new TextEncoder().encode("{}"))
 			expect(cacheManager.getAllHashes()).toEqual({})
 		})
 
 		it("should handle clear errors gracefully", async () => {
 			const consoleErrorSpy = vitest.spyOn(console, "error").mockImplementation(() => {})
-			;(vscode.workspace.fs.writeFile as Mock).mockRejectedValue(new Error("Save failed"))
+			;(mockFileSystem.writeFile as Mock).mockRejectedValue(new Error("Save failed"))
 
 			await cacheManager.clearCacheFile()
 

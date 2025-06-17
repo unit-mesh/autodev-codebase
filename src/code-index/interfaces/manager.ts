@@ -1,5 +1,4 @@
 import { VectorStoreSearchResult } from "./vector-store"
-import * as vscode from "vscode"
 
 /**
  * Interface for the code index manager
@@ -8,11 +7,11 @@ export interface ICodeIndexManager {
 	/**
 	 * Event emitted when progress is updated
 	 */
-	onProgressUpdate: vscode.Event<{
+	onProgressUpdate: (handler: (data: {
 		systemStatus: IndexingState
 		fileStatuses: Record<string, string>
 		message?: string
-	}>
+	}) => void) => () => void
 
 	/**
 	 * Current state of the indexing process

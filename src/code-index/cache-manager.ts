@@ -1,27 +1,28 @@
-import * as vscode from "vscode"
 import { createHash } from "crypto"
 import { ICacheManager } from "./interfaces/cache"
+import { IFileSystem, IStorage } from "../abstractions"
 import debounce from "lodash.debounce"
 
 /**
  * Manages the cache for code indexing
  */
 export class CacheManager implements ICacheManager {
-	private cachePath: vscode.Uri
+	private cachePath: string
 	private fileHashes: Record<string, string> = {}
 	private _debouncedSaveCache: () => void
 
 	/**
 	 * Creates a new cache manager
-	 * @param context VS Code extension context
+	 * @param fileSystem File system abstraction
+	 * @param storage Storage abstraction
 	 * @param workspacePath Path to the workspace
 	 */
 	constructor(
-		private context: vscode.ExtensionContext,
+		private fileSystem: IFileSystem,
+		private storage: IStorage,
 		private workspacePath: string,
 	) {
-		this.cachePath = vscode.Uri.joinPath(
-			context.globalStorageUri,
+		this.cachePath = this.storage.createCachePath(
 			`roo-index-cache-${createHash("sha256").update(workspacePath).digest("hex")}.json`,
 		)
 		this._debouncedSaveCache = debounce(async () => {
@@ -34,8 +35,8 @@ export class CacheManager implements ICacheManager {
 	 */
 	async initialize(): Promise<void> {
 		try {
-			const cacheData = await vscode.workspace.fs.readFile(this.cachePath)
-			this.fileHashes = JSON.parse(cacheData.toString())
+			const cacheData = await this.fileSystem.readFile(this.cachePath)
+			this.fileHashes = JSON.parse(new TextDecoder().decode(cacheData))
 		} catch (error) {
 			this.fileHashes = {}
 		}
@@ -46,7 +47,8 @@ export class CacheManager implements ICacheManager {
 	 */
 	private async _performSave(): Promise<void> {
 		try {
-			await vscode.workspace.fs.writeFile(this.cachePath, Buffer.from(JSON.stringify(this.fileHashes, null, 2)))
+			const content = new TextEncoder().encode(JSON.stringify(this.fileHashes, null, 2))
+			await this.fileSystem.writeFile(this.cachePath, content)
 		} catch (error) {
 			console.error("Failed to save cache:", error)
 		}
@@ -57,7 +59,8 @@ export class CacheManager implements ICacheManager {
 	 */
 	async clearCacheFile(): Promise<void> {
 		try {
-			await vscode.workspace.fs.writeFile(this.cachePath, Buffer.from("{}"))
+			const content = new TextEncoder().encode("{}")
+			await this.fileSystem.writeFile(this.cachePath, content)
 			this.fileHashes = {}
 		} catch (error) {
 			console.error("Failed to clear cache file:", error, this.cachePath)

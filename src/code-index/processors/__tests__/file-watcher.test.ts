@@ -2,6 +2,7 @@ import { IEmbedder } from "../../interfaces/embedder"
 import { IVectorStore } from "../../interfaces/vector-store"
 import { FileProcessingResult } from "../../interfaces/file-processor"
 import { FileWatcher } from "../file-watcher"
+import { IEventBus } from "../../../abstractions/core"
 
 import { createHash } from "crypto"
 
@@ -93,6 +94,7 @@ describe("FileWatcher", () => {
 	let mockCacheManager: any
 	let mockContext: any
 	let mockRooIgnoreController: any
+	let mockEventBus: IEventBus
 
 	beforeEach(() => {
 		mockEmbedder = {
@@ -118,6 +120,26 @@ describe("FileWatcher", () => {
 			subscriptions: [],
 		}
 
+		// Create mock event bus
+		const eventHandlers = new Map<string, Set<(data: any) => void>>()
+		mockEventBus = {
+			emit: jest.fn((event: string, data: any) => {
+				const handlers = eventHandlers.get(event)
+				if (handlers) {
+					handlers.forEach(handler => handler(data))
+				}
+			}),
+			on: jest.fn((event: string, handler: (data: any) => void) => {
+				if (!eventHandlers.has(event)) {
+					eventHandlers.set(event, new Set())
+				}
+				eventHandlers.get(event)!.add(handler)
+				return () => eventHandlers.get(event)!.delete(handler)
+			}),
+			off: jest.fn(),
+			once: jest.fn(),
+		}
+
 		const { RooIgnoreController, mockValidateAccess } = require("../../../../core/ignore/RooIgnoreController")
 		mockRooIgnoreController = new RooIgnoreController()
 		mockRooIgnoreController.validateAccess = mockValidateAccess.mockReturnValue(true)
@@ -125,6 +147,7 @@ describe("FileWatcher", () => {
 		fileWatcher = new FileWatcher(
 			"/mock/workspace",
 			mockContext,
+			mockEventBus,
 			mockCacheManager,
 			mockEmbedder,
 			mockVectorStore,

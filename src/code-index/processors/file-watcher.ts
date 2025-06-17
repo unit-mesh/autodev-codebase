@@ -22,6 +22,7 @@ import {
 import { codeParser } from "./parser"
 import { CacheManager } from "../cache-manager"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
+import { IEventBus } from "../../abstractions/core"
 
 /**
  * Implementation of the file watcher interface
@@ -35,33 +36,32 @@ export class FileWatcher implements IFileWatcher {
 	private readonly BATCH_DEBOUNCE_DELAY_MS = 500
 	private readonly FILE_PROCESSING_CONCURRENCY_LIMIT = 10
 
-	private readonly _onDidStartBatchProcessing = new vscode.EventEmitter<string[]>()
-	private readonly _onBatchProgressUpdate = new vscode.EventEmitter<{
-		processedInBatch: number
-		totalInBatch: number
-		currentFile?: string
-	}>()
-	private readonly _onDidFinishBatchProcessing = new vscode.EventEmitter<BatchProcessingSummary>()
+	private eventBus: IEventBus
 
 	/**
 	 * Event emitted when a batch of files begins processing
 	 */
-	public readonly onDidStartBatchProcessing = this._onDidStartBatchProcessing.event
+	public readonly onDidStartBatchProcessing: (handler: (data: string[]) => void) => () => void
 
 	/**
 	 * Event emitted to report progress during batch processing
 	 */
-	public readonly onBatchProgressUpdate = this._onBatchProgressUpdate.event
+	public readonly onBatchProgressUpdate: (handler: (data: {
+		processedInBatch: number
+		totalInBatch: number
+		currentFile?: string
+	}) => void) => () => void
 
 	/**
 	 * Event emitted when a batch of files has finished processing
 	 */
-	public readonly onDidFinishBatchProcessing = this._onDidFinishBatchProcessing.event
+	public readonly onDidFinishBatchProcessing: (handler: (data: BatchProcessingSummary) => void) => () => void
 
 	/**
 	 * Creates a new file watcher
 	 * @param workspacePath Path to the workspace
 	 * @param context VS Code extension context
+	 * @param eventBus Event bus for emitting events
 	 * @param embedder Optional embedder
 	 * @param vectorStore Optional vector store
 	 * @param cacheManager Cache manager
@@ -69,16 +69,23 @@ export class FileWatcher implements IFileWatcher {
 	constructor(
 		private workspacePath: string,
 		private context: vscode.ExtensionContext,
+		eventBus: IEventBus,
 		private readonly cacheManager: CacheManager,
 		private embedder?: IEmbedder,
 		private vectorStore?: IVectorStore,
 		ignoreInstance?: Ignore,
 		ignoreController?: RooIgnoreController,
 	) {
+		this.eventBus = eventBus
 		this.ignoreController = ignoreController || new RooIgnoreController(workspacePath)
 		if (ignoreInstance) {
 			this.ignoreInstance = ignoreInstance
 		}
+
+		// Initialize event handlers
+		this.onDidStartBatchProcessing = (handler) => this.eventBus.on('batch-start', handler)
+		this.onBatchProgressUpdate = (handler) => this.eventBus.on('batch-progress', handler)
+		this.onDidFinishBatchProcessing = (handler) => this.eventBus.on('batch-finish', handler)
 	}
 
 	/**
@@ -106,9 +113,7 @@ export class FileWatcher implements IFileWatcher {
 		if (this.batchProcessDebounceTimer) {
 			clearTimeout(this.batchProcessDebounceTimer)
 		}
-		this._onDidStartBatchProcessing.dispose()
-		this._onBatchProgressUpdate.dispose()
-		this._onDidFinishBatchProcessing.dispose()
+		// EventBus cleanup is handled by the platform implementation
 		this.accumulatedEvents.clear()
 	}
 
@@ -161,7 +166,7 @@ export class FileWatcher implements IFileWatcher {
 		this.accumulatedEvents.clear()
 
 		const filePathsInBatch = Array.from(eventsToProcess.keys())
-		this._onDidStartBatchProcessing.fire(filePathsInBatch)
+		this.eventBus.emit('batch-start', filePathsInBatch)
 
 		await this.processBatch(eventsToProcess)
 	}
@@ -194,7 +199,7 @@ export class FileWatcher implements IFileWatcher {
 					this.cacheManager.deleteHash(path)
 					batchResults.push({ path, status: "success" })
 					processedCountInBatch++
-					this._onBatchProgressUpdate.fire({
+					this.eventBus.emit('batch-progress', {
 						processedInBatch: processedCountInBatch,
 						totalInBatch: totalFilesInBatch,
 						currentFile: path,
@@ -205,7 +210,7 @@ export class FileWatcher implements IFileWatcher {
 				for (const path of pathsToExplicitlyDelete) {
 					batchResults.push({ path, status: "error", error: error as Error })
 					processedCountInBatch++
-					this._onBatchProgressUpdate.fire({
+					this.eventBus.emit('batch-progress', {
 						processedInBatch: processedCountInBatch,
 						totalInBatch: totalFilesInBatch,
 						currentFile: path,
@@ -236,7 +241,7 @@ export class FileWatcher implements IFileWatcher {
 			const chunkToProcess = filesToProcessConcurrently.slice(i, i + this.FILE_PROCESSING_CONCURRENCY_LIMIT)
 
 			const chunkProcessingPromises = chunkToProcess.map(async (fileDetail) => {
-				this._onBatchProgressUpdate.fire({
+				this.eventBus.emit('batch-progress', {
 					processedInBatch: processedCountInBatch,
 					totalInBatch: totalFilesInBatch,
 					currentFile: fileDetail.path,
@@ -299,7 +304,7 @@ export class FileWatcher implements IFileWatcher {
 				if (!pathsToExplicitlyDelete.includes(resultPath || "")) {
 					processedCountInBatch++
 				}
-				this._onBatchProgressUpdate.fire({
+				this.eventBus.emit('batch-progress', {
 					processedInBatch: processedCountInBatch,
 					totalInBatch: totalFilesInBatch,
 					currentFile: resultPath,
@@ -372,7 +377,7 @@ export class FileWatcher implements IFileWatcher {
 		let overallBatchError: Error | undefined
 
 		// Initial progress update
-		this._onBatchProgressUpdate.fire({
+		this.eventBus.emit('batch-progress', {
 			processedInBatch: 0,
 			totalInBatch: totalFilesInBatch,
 			currentFile: undefined,
@@ -428,17 +433,17 @@ export class FileWatcher implements IFileWatcher {
 		)
 
 		// Finalize
-		this._onDidFinishBatchProcessing.fire({
+		this.eventBus.emit('batch-finish', {
 			processedFiles: batchResults,
 			batchError: overallBatchError,
 		})
-		this._onBatchProgressUpdate.fire({
+		this.eventBus.emit('batch-progress', {
 			processedInBatch: totalFilesInBatch,
 			totalInBatch: totalFilesInBatch,
 		})
 
 		if (this.accumulatedEvents.size === 0) {
-			this._onBatchProgressUpdate.fire({
+			this.eventBus.emit('batch-progress', {
 				processedInBatch: 0,
 				totalInBatch: 0,
 				currentFile: undefined,
