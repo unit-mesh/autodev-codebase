@@ -1,10 +1,30 @@
-import * as vscode from "vscode"
+// NOTICE: This file contains optional external dependencies
+// It's marked as optional integration - see plan.md Day 7 Task 1
+//
+// External dependencies: vscode API, ripgrep binary, Node.js modules
+// For standalone usage, implement alternative search mechanisms using the abstract interfaces
+
 import * as path from "path"
 import * as fs from "fs"
 import * as childProcess from "child_process"
 import * as readline from "readline"
 import { byLengthAsc, Fzf } from "fzf"
-import { getBinPath } from "../ripgrep"
+
+// For VSCode environments, vscode should be available as peer dependency
+let vscode: any
+try {
+  vscode = require('vscode')
+} catch (e) {
+  // VSCode not available - this is expected in standalone environments
+  console.warn('VSCode not available - search functionality will be limited')
+}
+
+// Placeholder for ripgrep path resolution - should be injected via dependencies
+function getBinPath(appRoot?: string): Promise<string | null> {
+  // This is a placeholder implementation
+  // In production, this should be injected via dependencies or configuration
+  return Promise.resolve('rg') // Assume ripgrep is in PATH
+}
 
 export type FileResult = { path: string; type: "file" | "folder"; label?: string }
 
@@ -17,7 +37,7 @@ export async function executeRipgrep({
 	workspacePath: string
 	limit?: number
 }): Promise<FileResult[]> {
-	const rgPath = await getBinPath(vscode.env.appRoot)
+	const rgPath = await getBinPath(vscode?.env?.appRoot)
 
 	if (!rgPath) {
 		throw new Error(`ripgrep not found: ${rgPath}`)
@@ -146,7 +166,7 @@ export async function searchWorkspaceFiles(
 					const isDirectory = fs.lstatSync(fullPath).isDirectory()
 					return {
 						...result,
-						path: result.path.toPosix(),
+						path: result.path.replace(/\\/g, '/'), // Convert to POSIX path
 						type: isDirectory ? ("folder" as const) : ("file" as const),
 					}
 				}

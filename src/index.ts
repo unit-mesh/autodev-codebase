@@ -1,20 +1,17 @@
 // Core library
 export * from './lib/codebase'
 
-// Core abstractions
+// Core abstractions - Platform-agnostic interfaces
 export * from './abstractions'
 
-// VSCode adapters
-export * from './adapters/vscode'
+// VSCode adapters factory (optional - check availability before using)
+export { createVSCodeAdapters, isVSCodeAvailable } from './adapters/vscode/factory'
 
-// Code index functionality
-export * from './code-index'
-
-// Tree-sitter integration
-export * from './tree-sitter'
-
-// Search functionality
-export * from './search'
-
-// Utilities
-export * from './glob'
+// Note: Additional modules (code-index, tree-sitter, search, glob) are available
+// but may have external dependencies that need to be resolved in the consuming application
+// 
+// To include them, uncomment the following lines after resolving dependencies:
+// export * from './code-index'
+// export * from './tree-sitter'
+// export * from './glob'
+// export * from './search'

@@ -1,17 +1,43 @@
-const { withNx } = require('@nx/rollup/with-nx');
+const resolve = require('@rollup/plugin-node-resolve');
+const commonjs = require('@rollup/plugin-commonjs');
+const typescript = require('@rollup/plugin-typescript');
 
-module.exports = withNx(
-  {
-    main: './src/index.ts',
-    outputPath: '../../dist/packages/codebase',
-    tsConfig: './tsconfig.lib.json',
-    compiler: 'swc',
-    format: ['cjs', 'esm'],
-    assets: [{ input: '{projectRoot}', output: '.', glob: '*.md' }],
+module.exports = {
+  input: 'src/index.ts',
+  output: [
+    {
+      file: 'dist/index.js',
+      format: 'esm',
+      sourcemap: true,
+    },
+    {
+      file: 'dist/index.cjs',
+      format: 'cjs',
+      sourcemap: true,
+    }
+  ],
+  external: (id) => {
+    // Externalize vscode and its submodules
+    if (id === 'vscode' || id.startsWith('vscode/')) {
+      return true;
+    }
+    // Externalize Node.js built-ins that shouldn't be bundled
+    if (['fs', 'path', 'child_process', 'readline', 'crypto', 'os', 'stream', 'util'].includes(id)) {
+      return true;
+    }
+    // Bundle everything else (including fzf, tslib, etc.)
+    return false;
   },
-  {
-    // Provide additional rollup configuration here. See: https://rollupjs.org/configuration-options
-    // e.g.
-    // output: { sourcemap: true },
-  }
-);
+  plugins: [
+    resolve({
+      preferBuiltins: true,
+    }),
+    commonjs(),
+    typescript({
+      tsconfig: './tsconfig.lib.json',
+      declaration: true,
+      declarationDir: './dist',
+      rootDir: './src',
+    }),
+  ],
+};

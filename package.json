@@ -1,7 +1,37 @@
 {
   "name": "@autodev/codebase",
   "version": "0.0.1",
-  "main": "./index.cjs",
-  "module": "./index.js",
-  "dependencies": {}
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/index.js",
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "build": "rollup -c rollup.config.cjs",
+    "dev": "rollup -c rollup.config.cjs --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "vscode": "^1.74.0"
+  },
+  "peerDependenciesMeta": {
+    "vscode": { 
+      "optional": true 
+    }
+  },
+  "dependencies": {
+    "@qdrant/js-client-rest": "^1.11.0",
+    "tree-sitter": "^0.21.1",
+    "web-tree-sitter": "^0.23.0",
+    "fzf": "^0.5.2",
+    "tslib": "^2.7.0"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^26.0.1",
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "rollup": "^4.21.2",
+    "typescript": "^5.6.2"
+  }
 }

@@ -1,3 +1,20 @@
+/**
+ * @fileoverview OPTIONAL INTEGRATION - CodebaseSearchTool
+ * 
+ * This file contains VSCode-specific integration code that relies on external dependencies
+ * from the roo-code ecosystem. It is marked as optional for standalone codebase library usage.
+ * 
+ * Dependencies:
+ * - VSCode API (vscode module)
+ * - External Task system
+ * - Utils from roo-code workspace utilities
+ * 
+ * For standalone usage, implement similar functionality using the abstract interfaces:
+ * - IWorkspace for workspace path resolution
+ * - IConfigProvider for configuration access
+ * - CodeIndexManager with dependency injection pattern
+ */
+
 import * as vscode from "vscode"
 
 import { Task } from "../task/Task"

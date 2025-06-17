@@ -1,12 +1,8 @@
 import { listFiles } from "../../glob/list-files"
 import { Ignore } from "ignore"
-import { RooIgnoreController } from "../../../core/ignore/RooIgnoreController"
-import { stat } from "fs/promises"
-import * as path from "path"
-import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
 import { scannerExtensions } from "../shared/supported-extensions"
-import * as vscode from "vscode"
 import { CodeBlock, ICodeParser, IEmbedder, IVectorStore, IDirectoryScanner } from "../interfaces"
+import { IFileSystem, IWorkspace, IPathUtils } from "../../abstractions"
 import { createHash } from "crypto"
 import { v5 as uuidv5 } from "uuid"
 import pLimit from "p-limit"
@@ -23,14 +19,19 @@ import {
 	BATCH_PROCESSING_CONCURRENCY,
 } from "../constants"
 
+export interface DirectoryScannerDependencies {
+	embedder: IEmbedder
+	qdrantClient: IVectorStore
+	codeParser: ICodeParser
+	cacheManager: CacheManager
+	ignoreInstance: Ignore
+	fileSystem: IFileSystem
+	workspace: IWorkspace
+	pathUtils: IPathUtils
+}
+
 export class DirectoryScanner implements IDirectoryScanner {
-	constructor(
-		private readonly embedder: IEmbedder,
-		private readonly qdrantClient: IVectorStore,
-		private readonly codeParser: ICodeParser,
-		private readonly cacheManager: CacheManager,
-		private readonly ignoreInstance: Ignore,
-	) {}
+	constructor(private readonly deps: DirectoryScannerDependencies) {}
 
 	/**
 	 * Recursively scans a directory for code blocks in supported files.
@@ -53,19 +54,14 @@ export class DirectoryScanner implements IDirectoryScanner {
 		// Filter out directories (marked with trailing '/')
 		const filePaths = allPaths.filter((p) => !p.endsWith("/"))
 
-		// Initialize RooIgnoreController if not provided
-		const ignoreController = new RooIgnoreController(directoryPath)
-
-		await ignoreController.initialize()
-
-		// Filter paths using .rooignore
-		const allowedPaths = ignoreController.filterPaths(filePaths)
+		// Filter paths using workspace ignore rules
+		const allowedPaths = filePaths.filter(filePath => !this.deps.workspace.shouldIgnore(filePath))
 
 		// Filter by supported extensions and ignore patterns
 		const supportedPaths = allowedPaths.filter((filePath) => {
-			const ext = path.extname(filePath).toLowerCase()
-			const relativeFilePath = generateRelativeFilePath(filePath)
-			return scannerExtensions.includes(ext) && !this.ignoreInstance.ignores(relativeFilePath)
+			const ext = this.deps.pathUtils.extname(filePath).toLowerCase()
+			const relativeFilePath = this.deps.workspace.getRelativePath(filePath)
+			return scannerExtensions.includes(ext) && !this.deps.ignoreInstance.ignores(relativeFilePath)
 		})
 
 		// Initialize tracking variables
@@ -93,23 +89,22 @@ export class DirectoryScanner implements IDirectoryScanner {
 			parseLimiter(async () => {
 				try {
 					// Check file size
-					const stats = await stat(filePath)
+					const stats = await this.deps.fileSystem.stat(filePath)
 					if (stats.size > MAX_FILE_SIZE_BYTES) {
 						skippedCount++ // Skip large files
 						return
 					}
 
 					// Read file content
-					const content = await vscode.workspace.fs
-						.readFile(vscode.Uri.file(filePath))
-						.then((buffer) => Buffer.from(buffer).toString("utf-8"))
+					const buffer = await this.deps.fileSystem.readFile(filePath)
+					const content = new TextDecoder().decode(buffer)
 
 					// Calculate current hash
 					const currentFileHash = createHash("sha256").update(content).digest("hex")
 					processedFiles.add(filePath)
 
 					// Check against cache
-					const cachedFileHash = this.cacheManager.getHash(filePath)
+					const cachedFileHash = this.deps.cacheManager.getHash(filePath)
 					if (cachedFileHash === currentFileHash) {
 						// File is unchanged
 						skippedCount++
@@ -117,14 +112,14 @@ export class DirectoryScanner implements IDirectoryScanner {
 					}
 
 					// File is new or changed - parse it using the injected parser function
-					const blocks = await this.codeParser.parseFile(filePath, { content, fileHash: currentFileHash })
+					const blocks = await this.deps.codeParser.parseFile(filePath, { content, fileHash: currentFileHash })
 					const fileBlockCount = blocks.length
 					onFileParsed?.(fileBlockCount)
 					codeBlocks.push(...blocks)
 					processedCount++
 
 					// Process embeddings if configured
-					if (this.embedder && this.qdrantClient && blocks.length > 0) {
+					if (this.deps.embedder && this.deps.qdrantClient && blocks.length > 0) {
 						// Add to batch accumulators
 						let addedBlocksFromFile = false
 						for (const block of blocks) {
@@ -141,7 +136,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 										currentBatchFileInfos.push({
 											filePath,
 											fileHash: currentFileHash,
-											isNew: !this.cacheManager.getHash(filePath),
+											isNew: !this.deps.cacheManager.getHash(filePath),
 										})
 									}
 
@@ -174,7 +169,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 						}
 					} else {
 						// Only update hash if not being processed in a batch
-						await this.cacheManager.updateHash(filePath, currentFileHash)
+						await this.deps.cacheManager.updateHash(filePath, currentFileHash)
 					}
 				} catch (error) {
 					console.error(`Error processing file ${filePath}:`, error)
@@ -214,14 +209,14 @@ export class DirectoryScanner implements IDirectoryScanner {
 		await Promise.all(activeBatchPromises)
 
 		// Handle deleted files
-		const oldHashes = this.cacheManager.getAllHashes()
+		const oldHashes = this.deps.cacheManager.getAllHashes()
 		for (const cachedFilePath of Object.keys(oldHashes)) {
 			if (!processedFiles.has(cachedFilePath)) {
 				// File was deleted or is no longer supported/indexed
-				if (this.qdrantClient) {
+				if (this.deps.qdrantClient) {
 					try {
-						await this.qdrantClient.deletePointsByFilePath(cachedFilePath)
-						await this.cacheManager.deleteHash(cachedFilePath)
+						await this.deps.qdrantClient.deletePointsByFilePath(cachedFilePath)
+						await this.deps.cacheManager.deleteHash(cachedFilePath)
 					} catch (error) {
 						console.error(`[DirectoryScanner] Failed to delete points for ${cachedFilePath}:`, error)
 						if (onError) {
@@ -273,7 +268,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 				]
 				if (uniqueFilePaths.length > 0) {
 					try {
-						await this.qdrantClient.deletePointsByMultipleFilePaths(uniqueFilePaths)
+						await this.deps.qdrantClient.deletePointsByMultipleFilePaths(uniqueFilePaths)
 					} catch (deleteError) {
 						console.error(
 							`[DirectoryScanner] Failed to delete points for ${uniqueFilePaths.length} files before upsert:`,
@@ -286,11 +281,11 @@ export class DirectoryScanner implements IDirectoryScanner {
 				// --- End Deletion Step ---
 
 				// Create embeddings for batch
-				const { embeddings } = await this.embedder.createEmbeddings(batchTexts)
+				const { embeddings } = await this.deps.embedder.createEmbeddings(batchTexts)
 
 				// Prepare points for Qdrant
 				const points = batchBlocks.map((block, index) => {
-					const normalizedAbsolutePath = generateNormalizedAbsolutePath(block.file_path)
+					const normalizedAbsolutePath = this.deps.pathUtils.normalize(this.deps.pathUtils.resolve(block.file_path))
 
 					const stableName = `${normalizedAbsolutePath}:${block.start_line}`
 					const pointId = uuidv5(stableName, QDRANT_CODE_BLOCK_NAMESPACE)
@@ -299,7 +294,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 						id: pointId,
 						vector: embeddings[index],
 						payload: {
-							filePath: generateRelativeFilePath(normalizedAbsolutePath),
+							filePath: this.deps.workspace.getRelativePath(normalizedAbsolutePath),
 							codeChunk: block.content,
 							startLine: block.start_line,
 							endLine: block.end_line,
@@ -308,12 +303,12 @@ export class DirectoryScanner implements IDirectoryScanner {
 				})
 
 				// Upsert points to Qdrant
-				await this.qdrantClient.upsertPoints(points)
+				await this.deps.qdrantClient.upsertPoints(points)
 				onBlocksIndexed?.(batchBlocks.length)
 
 				// Update hashes for successfully processed files in this batch
 				for (const fileInfo of batchFileInfos) {
-					await this.cacheManager.updateHash(fileInfo.filePath, fileInfo.fileHash)
+					await this.deps.cacheManager.updateHash(fileInfo.filePath, fileInfo.fileHash)
 				}
 				success = true
 			} catch (error) {

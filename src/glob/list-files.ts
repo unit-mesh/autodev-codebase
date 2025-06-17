@@ -1,10 +1,7 @@
 import os from "os"
-import * as path from "path"
 import * as fs from "fs"
 import * as childProcess from "child_process"
-import * as vscode from "vscode"
-import { arePathsEqual } from "../../utils/path"
-import { getBinPath } from "../../services/ripgrep"
+import { IPathUtils } from "../abstractions"
 
 /**
  * List of directories that are typically large and should be ignored
@@ -29,31 +26,45 @@ const DIRS_TO_IGNORE = [
 	".*",
 ]
 
+export interface ListFilesDependencies {
+	pathUtils: IPathUtils
+	ripgrepPath?: string
+}
+
 /**
  * List files in a directory, with optional recursive traversal
  *
  * @param dirPath - Directory path to list files from
  * @param recursive - Whether to recursively list files in subdirectories
  * @param limit - Maximum number of files to return
+ * @param deps - Dependencies including path utilities and optional ripgrep path
  * @returns Tuple of [file paths array, whether the limit was reached]
  */
-export async function listFiles(dirPath: string, recursive: boolean, limit: number): Promise<[string[], boolean]> {
+export async function listFiles(
+	dirPath: string, 
+	recursive: boolean, 
+	limit: number,
+	deps: ListFilesDependencies
+): Promise<[string[], boolean]> {
 	// Handle special directories
-	const specialResult = await handleSpecialDirectories(dirPath)
+	const specialResult = await handleSpecialDirectories(dirPath, deps.pathUtils)
 
 	if (specialResult) {
 		return specialResult
 	}
 
 	// Get ripgrep path
-	const rgPath = await getRipgrepPath()
+	const rgPath = deps.ripgrepPath
+	if (!rgPath) {
+		throw new Error("Ripgrep path not provided. Please provide ripgrepPath in dependencies.")
+	}
 
 	// Get files using ripgrep
-	const files = await listFilesWithRipgrep(rgPath, dirPath, recursive, limit)
+	const files = await listFilesWithRipgrep(rgPath, dirPath, recursive, limit, deps.pathUtils)
 
 	// Get directories with proper filtering
-	const gitignorePatterns = await parseGitignoreFile(dirPath, recursive)
-	const directories = await listFilteredDirectories(dirPath, recursive, gitignorePatterns)
+	const gitignorePatterns = await parseGitignoreFile(dirPath, recursive, deps.pathUtils)
+	const directories = await listFilteredDirectories(dirPath, recursive, gitignorePatterns, deps.pathUtils)
 
 	// Combine and format the results
 	return formatAndCombineResults(files, directories, limit)
@@ -62,19 +73,19 @@ export async function listFiles(dirPath: string, recursive: boolean, limit: numb
 /**
  * Handle special directories (root, home) that should not be fully listed
  */
-async function handleSpecialDirectories(dirPath: string): Promise<[string[], boolean] | null> {
-	const absolutePath = path.resolve(dirPath)
+async function handleSpecialDirectories(dirPath: string, pathUtils: IPathUtils): Promise<[string[], boolean] | null> {
+	const absolutePath = pathUtils.resolve(dirPath)
 
 	// Do not allow listing files in root directory
-	const root = process.platform === "win32" ? path.parse(absolutePath).root : "/"
-	const isRoot = arePathsEqual(absolutePath, root)
+	const root = process.platform === "win32" ? absolutePath.split(/[/\\]/)[0] + "/" : "/"
+	const isRoot = pathUtils.normalize(absolutePath) === pathUtils.normalize(root)
 	if (isRoot) {
 		return [[root], false]
 	}
 
 	// Do not allow listing files in home directory
 	const homeDir = os.homedir()
-	const isHomeDir = arePathsEqual(absolutePath, homeDir)
+	const isHomeDir = pathUtils.normalize(absolutePath) === pathUtils.normalize(homeDir)
 	if (isHomeDir) {
 		return [[homeDir], false]
 	}
@@ -82,19 +93,6 @@ async function handleSpecialDirectories(dirPath: string): Promise<[string[], boo
 	return null
 }
 
-/**
- * Get the path to the ripgrep binary
- */
-async function getRipgrepPath(): Promise<string> {
-	const vscodeAppRoot = vscode.env.appRoot
-	const rgPath = await getBinPath(vscodeAppRoot)
-
-	if (!rgPath) {
-		throw new Error("Could not find ripgrep binary")
-	}
-
-	return rgPath
-}
 
 /**
  * List files using ripgrep with appropriate arguments
@@ -104,8 +102,9 @@ async function listFilesWithRipgrep(
 	dirPath: string,
 	recursive: boolean,
 	limit: number,
+	pathUtils: IPathUtils,
 ): Promise<string[]> {
-	const absolutePath = path.resolve(dirPath)
+	const absolutePath = pathUtils.resolve(dirPath)
 	const rgArgs = buildRipgrepArgs(absolutePath, recursive)
 	return execRipgrep(rgPath, rgArgs, limit)
 }
@@ -172,13 +171,13 @@ function buildNonRecursiveArgs(): string[] {
 /**
  * Parse the .gitignore file if it exists and is relevant
  */
-async function parseGitignoreFile(dirPath: string, recursive: boolean): Promise<string[]> {
+async function parseGitignoreFile(dirPath: string, recursive: boolean, pathUtils: IPathUtils): Promise<string[]> {
 	if (!recursive) {
 		return [] // Only needed for recursive mode
 	}
 
-	const absolutePath = path.resolve(dirPath)
-	const gitignorePath = path.join(absolutePath, ".gitignore")
+	const absolutePath = pathUtils.resolve(dirPath)
+	const gitignorePath = pathUtils.join(absolutePath, ".gitignore")
 
 	try {
 		// Check if .gitignore exists
@@ -210,8 +209,9 @@ async function listFilteredDirectories(
 	dirPath: string,
 	recursive: boolean,
 	gitignorePatterns: string[],
+	pathUtils: IPathUtils,
 ): Promise<string[]> {
-	const absolutePath = path.resolve(dirPath)
+	const absolutePath = pathUtils.resolve(dirPath)
 
 	try {
 		// List all entries in the directory
@@ -223,7 +223,7 @@ async function listFilteredDirectories(
 			.filter((entry) => {
 				return shouldIncludeDirectory(entry.name, recursive, gitignorePatterns)
 			})
-			.map((entry) => path.join(absolutePath, entry.name))
+			.map((entry) => pathUtils.join(absolutePath, entry.name))
 
 		// Format directory paths with trailing slash
 		return directories.map((dir) => (dir.endsWith("/") ? dir : `${dir}/`))
