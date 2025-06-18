@@ -296,7 +296,7 @@ describe('Node.js Adapters Integration', () => {
         configPath,
         defaultConfig: {
           isEnabled: false,
-          embedderProvider: EmbedderProvider.OpenAI
+          embedderProvider: "openai"
         }
       })
     })
@@ -305,7 +305,7 @@ describe('Node.js Adapters Integration', () => {
       const testConfig = {
         isEnabled: true,
         isConfigured: true,
-        embedderProvider: EmbedderProvider.Ollama,
+        embedderProvider: "ollama",
         ollamaOptions: {
           baseUrl: 'http://localhost:11434',
           apiKey: ''
@@ -316,7 +316,7 @@ describe('Node.js Adapters Integration', () => {
       const loadedConfig = await configProvider.loadConfig()
 
       expect(loadedConfig.isEnabled).toBe(true)
-      expect(loadedConfig.embedderProvider).toBe(EmbedderProvider.Ollama)
+      expect(loadedConfig.embedderProvider).toBe("ollama")
       expect(loadedConfig.ollamaOptions?.baseUrl).toBe('http://localhost:11434')
     })
 
@@ -324,7 +324,7 @@ describe('Node.js Adapters Integration', () => {
       // Test invalid configuration
       await configProvider.saveConfig({
         isEnabled: true,
-        embedderProvider: EmbedderProvider.OpenAI
+        embedderProvider: "openai"
         // Missing required openAiOptions
       })
 
@@ -383,7 +383,7 @@ describe('Node.js Adapters Integration', () => {
       await dependencies.configProvider.saveConfig({
         isEnabled: true,
         isConfigured: true,
-        embedderProvider: EmbedderProvider.OpenAI,
+        embedderProvider: "openai",
         openAiOptions: {
           apiKey: 'test-key'
         },

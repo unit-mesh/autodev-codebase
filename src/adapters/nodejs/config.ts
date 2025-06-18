@@ -28,7 +28,7 @@ export class NodeConfigProvider implements IConfigProvider {
     this.config = {
       isEnabled: false,
       isConfigured: false,
-      embedderProvider: EmbedderProvider.OpenAI,
+      embedderProvider: "openai",
       ...options.defaultConfig
     }
   }
@@ -89,7 +89,7 @@ export class NodeConfigProvider implements IConfigProvider {
         this.config = {
           isEnabled: false,
           isConfigured: false,
-          embedderProvider: EmbedderProvider.OpenAI,
+          embedderProvider: "openai",
           ...fileConfig
         }
       }
@@ -146,7 +146,7 @@ export class NodeConfigProvider implements IConfigProvider {
     const defaultConfig: CodeIndexConfig = {
       isEnabled: false,
       isConfigured: false,
-      embedderProvider: EmbedderProvider.OpenAI
+      embedderProvider: "openai"
     }
     
     await this.saveConfig(defaultConfig)
@@ -172,17 +172,17 @@ export class NodeConfigProvider implements IConfigProvider {
 
     // Validate embedder configuration
     switch (config.embedderProvider) {
-      case EmbedderProvider.OpenAI:
+      case "openai":
         if (!config.openAiOptions?.apiKey) {
           errors.push('OpenAI API key is required')
         }
         break
-      case EmbedderProvider.Ollama:
+      case "ollama":
         if (!config.ollamaOptions?.baseUrl) {
           errors.push('Ollama base URL is required')
         }
         break
-      case EmbedderProvider.OpenAICompatible:
+      case "openai-compatible":
         if (!config.openAiCompatibleOptions?.baseUrl) {
           errors.push('OpenAI Compatible base URL is required')
         }

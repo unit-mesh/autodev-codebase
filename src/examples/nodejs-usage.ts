@@ -36,7 +36,7 @@ export async function basicUsageExample() {
   await dependencies.configProvider.saveConfig({
     isEnabled: true,
     isConfigured: true,
-    embedderProvider: EmbedderProvider.OpenAI,
+    embedderProvider: "openai",
     openAiOptions: {
       apiKey: process.env.OPENAI_API_KEY || 'your-api-key-here'
     },
@@ -70,7 +70,7 @@ export async function advancedUsageExample() {
       configPath: path.join(workspacePath, '.autodev-config.json'),
       defaultConfig: {
         isEnabled: true,
-        embedderProvider: EmbedderProvider.Ollama,
+        embedderProvider: "ollama",
         ollamaOptions: {
           baseUrl: 'http://localhost:11434',
           apiKey: ''
@@ -206,7 +206,7 @@ export async function cliExample() {
       await dependencies.configProvider.saveConfig({
         isEnabled: true,
         isConfigured: false,
-        embedderProvider: EmbedderProvider.OpenAI
+        embedderProvider: "openai"
       })
       console.log('Configuration initialized')
       break

@@ -49,7 +49,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 	): Promise<{ codeBlocks: CodeBlock[]; stats: { processed: number; skipped: number }; totalBlockCount: number }> {
 		const directoryPath = directory
 		// Get all files recursively (handles .gitignore automatically)
-		const [allPaths, _] = await listFiles(directoryPath, true, MAX_LIST_FILES_LIMIT)
+		const [allPaths, _] = await listFiles(directoryPath, true, MAX_LIST_FILES_LIMIT, { pathUtils: this.deps.pathUtils, ripgrepPath: 'rg' })
 
 		// Filter out directories (marked with trailing '/')
 		const filePaths = allPaths.filter((p) => !p.endsWith("/"))

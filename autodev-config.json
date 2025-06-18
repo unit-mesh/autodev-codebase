@@ -1,0 +1,5 @@
+{
+  "isEnabled": true,
+  "isConfigured": false,
+  "embedderProvider": "ollama"
+}
