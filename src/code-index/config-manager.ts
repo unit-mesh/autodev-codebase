@@ -91,8 +91,8 @@ export class CodeIndexConfigManager {
 			configured: this.isConfigured(),
 			embedderProvider: this.embedderProvider,
 			modelId: this.modelId,
-			openAiKey: this.openAiOptions?.openAiNativeApiKey ?? "",
-			ollamaBaseUrl: this.ollamaOptions?.ollamaBaseUrl ?? "",
+			openAiKey: this.openAiOptions?.apiKey ?? "",
+			ollamaBaseUrl: this.ollamaOptions?.baseUrl ?? "",
 			openAiCompatibleBaseUrl: this.openAiCompatibleOptions?.baseUrl ?? "",
 			openAiCompatibleApiKey: this.openAiCompatibleOptions?.apiKey ?? "",
 			openAiCompatibleModelDimension: this.openAiCompatibleOptions?.modelDimension,
@@ -128,13 +128,13 @@ export class CodeIndexConfigManager {
 	 */
 	public isConfigured(): boolean {
 		if (this.embedderProvider === "openai") {
-			const openAiKey = this.openAiOptions?.openAiNativeApiKey
+			const openAiKey = this.openAiOptions?.apiKey
 			const qdrantUrl = this.qdrantUrl
 			const isConfigured = !!(openAiKey && qdrantUrl)
 			return isConfigured
 		} else if (this.embedderProvider === "ollama") {
 			// Ollama model ID has a default, so only base URL is strictly required for config
-			const ollamaBaseUrl = this.ollamaOptions?.ollamaBaseUrl
+			const ollamaBaseUrl = this.ollamaOptions?.baseUrl
 			const qdrantUrl = this.qdrantUrl
 			const isConfigured = !!(ollamaBaseUrl && qdrantUrl)
 			return isConfigured
@@ -194,14 +194,14 @@ export class CodeIndexConfigManager {
 
 			// Authentication changes
 			if (this.embedderProvider === "openai") {
-				const currentOpenAiKey = this.openAiOptions?.openAiNativeApiKey ?? ""
+				const currentOpenAiKey = this.openAiOptions?.apiKey ?? ""
 				if (prevOpenAiKey !== currentOpenAiKey) {
 					return true
 				}
 			}
 
 			if (this.embedderProvider === "ollama") {
-				const currentOllamaBaseUrl = this.ollamaOptions?.ollamaBaseUrl ?? ""
+				const currentOllamaBaseUrl = this.ollamaOptions?.baseUrl ?? ""
 				if (prevOllamaBaseUrl !== currentOllamaBaseUrl) {
 					return true
 				}
@@ -237,8 +237,8 @@ export class CodeIndexConfigManager {
 	 */
 	private _hasVectorDimensionChanged(prevProvider: EmbedderProvider, prevModelId?: string): boolean {
 		const currentProvider = this.embedderProvider
-		const currentModelId = this.modelId ?? getDefaultModelId(currentProvider)
-		const resolvedPrevModelId = prevModelId ?? getDefaultModelId(prevProvider)
+		const currentModelId = this.modelId ?? getDefaultModelId()
+		const resolvedPrevModelId = prevModelId ?? getDefaultModelId()
 
 		// If model IDs are the same and provider is the same, no dimension change
 		if (prevProvider === currentProvider && resolvedPrevModelId === currentModelId) {
@@ -246,8 +246,8 @@ export class CodeIndexConfigManager {
 		}
 
 		// Get vector dimensions for both models
-		const prevDimension = getModelDimension(prevProvider, resolvedPrevModelId)
-		const currentDimension = getModelDimension(currentProvider, currentModelId)
+		const prevDimension = getModelDimension(resolvedPrevModelId)
+		const currentDimension = getModelDimension(currentModelId)
 
 		// If we can't determine dimensions, be safe and restart
 		if (prevDimension === undefined || currentDimension === undefined) {

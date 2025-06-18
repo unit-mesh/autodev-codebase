@@ -9,6 +9,7 @@ import * as fs from "fs"
 import * as childProcess from "child_process"
 import * as readline from "readline"
 import { byLengthAsc, Fzf } from "fzf"
+import { getBinPath as getRipgrepBinPath } from "../ripgrep"
 
 // For VSCode environments, vscode should be available as peer dependency
 let vscode: any
@@ -19,11 +20,10 @@ try {
   console.warn('VSCode not available - search functionality will be limited')
 }
 
-// Placeholder for ripgrep path resolution - should be injected via dependencies
-function getBinPath(appRoot?: string): Promise<string | null> {
-  // This is a placeholder implementation
-  // In production, this should be injected via dependencies or configuration
-  return Promise.resolve('rg') // Assume ripgrep is in PATH
+// Use the proper ripgrep getBinPath implementation
+async function getBinPath(appRoot?: string): Promise<string | null> {
+  const rgPath = await getRipgrepBinPath(undefined, appRoot)
+  return rgPath || null
 }
 
 export type FileResult = { path: string; type: "file" | "folder"; label?: string }

@@ -10,6 +10,9 @@ export { createVSCodeAdapters, isVSCodeAvailable } from './adapters/vscode/facto
 // Node.js adapters factory (for Node.js environments)
 export * from './adapters/nodejs'
 
+// Ripgrep integration (platform-agnostic)
+export * from './ripgrep'
+
 // Note: Additional modules (code-index, tree-sitter, search, glob) are available
 // but may have external dependencies that need to be resolved in the consuming application
 // 
