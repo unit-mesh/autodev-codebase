@@ -10,14 +10,15 @@
   "scripts": {
     "build": "rollup -c rollup.config.cjs",
     "dev": "rollup -c rollup.config.cjs --watch",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "npx vitest"
   },
   "peerDependencies": {
     "vscode": "^1.74.0"
   },
   "peerDependenciesMeta": {
-    "vscode": { 
-      "optional": true 
+    "vscode": {
+      "optional": true
     }
   },
   "dependencies": {

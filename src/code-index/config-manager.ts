@@ -1,14 +1,14 @@
 import { EmbedderProvider } from "./interfaces/manager"
 import { CodeIndexConfig } from "./interfaces/config"
 import { SEARCH_MIN_SCORE } from "./constants"
-import { getDefaultModelId, getModelDimension } from "../../shared/embeddingModels"
-import { 
-	IConfigProvider, 
-	EmbedderConfig, 
-	VectorStoreConfig, 
+import { getDefaultModelId, getModelDimension } from "../shared/embeddingModels"
+import {
+	IConfigProvider,
+	EmbedderConfig,
+	VectorStoreConfig,
 	SearchConfig,
 	ConfigSnapshot,
-	ApiHandlerOptions 
+	ApiHandlerOptions
 } from "../abstractions/config"
 
 /**
@@ -57,11 +57,11 @@ export class CodeIndexConfigManager {
 		this.openAiOptions = embedderConfig.openAiOptions
 		this.ollamaOptions = embedderConfig.ollamaOptions
 		this.openAiCompatibleOptions = embedderConfig.openAiCompatibleOptions
-		
+
 		// Vector store configuration
 		this.qdrantUrl = vectorStoreConfig.qdrantUrl ?? "http://localhost:6333"
 		this.qdrantApiKey = vectorStoreConfig.qdrantApiKey ?? ""
-		
+
 		// Search configuration
 		this.searchMinScore = searchConfig.minScore ?? SEARCH_MIN_SCORE
 	}
