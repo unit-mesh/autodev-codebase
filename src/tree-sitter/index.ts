@@ -118,7 +118,7 @@ export async function parseSourceCodeDefinitionsForFile(
 	// Special case for markdown files
 	if (ext === ".md" || ext === ".markdown") {
 		// Check if we have permission to access this file
-		if (dependencies.workspace.shouldIgnore(filePath)) {
+		if (await dependencies.workspace.shouldIgnore(filePath)) {
 			return undefined
 		}
 
@@ -173,7 +173,12 @@ export async function parseSourceCodeForDefinitionsTopLevel(
 	const { filesToParse } = separateFiles(allFiles, dependencies.pathUtils)
 
 	// Filter filepaths for access using workspace
-	const allowedFilesToParse = filesToParse.filter(file => !dependencies.workspace.shouldIgnore(file))
+	const allowedFilesToParse: string[] = []
+	for (const file of filesToParse) {
+		if (!(await dependencies.workspace.shouldIgnore(file))) {
+			allowedFilesToParse.push(file)
+		}
+	}
 
 	// Separate markdown files from other files
 	const markdownFiles: string[] = []
@@ -194,7 +199,7 @@ export async function parseSourceCodeForDefinitionsTopLevel(
 	// Process markdown files
 	for (const file of markdownFiles) {
 		// Check if we have permission to access this file
-		if (dependencies.workspace.shouldIgnore(file)) {
+		if (await dependencies.workspace.shouldIgnore(file)) {
 			continue
 		}
 
@@ -388,7 +393,7 @@ async function parseFile(
 	dependencies: TreeSitterDependencies,
 ): Promise<string | null> {
 	// Check if we have permission to access this file
-	if (dependencies.workspace.shouldIgnore(filePath)) {
+	if (await dependencies.workspace.shouldIgnore(filePath)) {
 		return null
 	}
 

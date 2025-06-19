@@ -20,7 +20,7 @@ export interface IWorkspace {
   /**
    * Check if a path should be ignored
    */
-  shouldIgnore(path: string): boolean
+  shouldIgnore(path: string): Promise<boolean>
   
   /**
    * Get workspace name

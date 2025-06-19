@@ -1,6 +1,6 @@
 import { OpenAI } from "openai"
 import { OpenAiNativeHandler } from "../../../api/providers/openai-native"
-import { ApiHandlerOptions } from "../../../shared/api"
+import { ApiHandlerOptions } from "../shared/api"
 import { IEmbedder, EmbeddingResponse, EmbedderInfo } from "../interfaces"
 import {
 	MAX_BATCH_TOKENS,
@@ -12,7 +12,7 @@ import {
 /**
  * OpenAI implementation of the embedder interface with batching and rate limiting
  */
-export class OpenAiEmbedder extends OpenAiNativeHandler implements IEmbedder {
+export class OpenAiEmbedder implements IEmbedder {
 	private embeddingsClient: OpenAI
 	private readonly defaultModelId: string
 
@@ -21,7 +21,6 @@ export class OpenAiEmbedder extends OpenAiNativeHandler implements IEmbedder {
 	 * @param options API handler options
 	 */
 	constructor(options: ApiHandlerOptions & { openAiEmbeddingModelId?: string }) {
-		super(options)
 		const apiKey = this.options.openAiNativeApiKey ?? "not-provided"
 		this.embeddingsClient = new OpenAI({ apiKey })
 		this.defaultModelId = options.openAiEmbeddingModelId || "text-embedding-3-small"

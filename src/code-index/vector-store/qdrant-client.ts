@@ -1,7 +1,7 @@
 import { QdrantClient, Schemas } from "@qdrant/js-client-rest"
 import { createHash } from "crypto"
 import * as path from "path"
-import { getWorkspacePath } from "../../../utils/path"
+import { getWorkspacePath } from "../../utils/path"
 import { IVectorStore } from "../interfaces/vector-store"
 import { Payload, VectorStoreSearchResult } from "../interfaces"
 import { MAX_SEARCH_RESULTS, SEARCH_MIN_SCORE } from "../constants"

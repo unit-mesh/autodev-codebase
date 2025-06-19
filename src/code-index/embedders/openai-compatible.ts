@@ -6,7 +6,7 @@ import {
 	MAX_BATCH_RETRIES as MAX_RETRIES,
 	INITIAL_RETRY_DELAY_MS as INITIAL_DELAY_MS,
 } from "../constants"
-import { getDefaultModelId } from "../../../shared/embeddingModels"
+import { getDefaultModelId } from "../shared/embeddingModels"
 
 interface EmbeddingItem {
 	embedding: string | number[]

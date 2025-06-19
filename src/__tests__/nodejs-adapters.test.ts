@@ -17,8 +17,8 @@ import {
   NodeWorkspace,
   NodePathUtils,
   NodeConfigProvider
-} from '../../adapters/nodejs'
-import { EmbedderProvider } from '../../code-index/interfaces/manager'
+} from '../adapters/nodejs'
+import { EmbedderProvider } from '../code-index/interfaces/manager'
 
 describe('Node.js Adapters Integration', () => {
   let tempDir: string
@@ -64,7 +64,7 @@ describe('Node.js Adapters Integration', () => {
       expect(stats.isFile).toBe(true)
       expect(stats.isDirectory).toBe(false)
       expect(stats.size).toBeGreaterThan(0)
-      expect(stats.mtime).toBeInstanceOf(Number)
+      expect(stats.mtime).toBeTypeOf('number')
     })
 
     it('should handle directories', async () => {
@@ -72,7 +72,7 @@ describe('Node.js Adapters Integration', () => {
       await fileSystem.mkdir(dirPath)
 
       expect(await fileSystem.exists(dirPath)).toBe(true)
-      
+
       const stats = await fileSystem.stat(dirPath)
       expect(stats.isDirectory).toBe(true)
       expect(stats.isFile).toBe(false)
@@ -85,7 +85,7 @@ describe('Node.js Adapters Integration', () => {
       // Create test files
       const file1 = path.join(dirPath, 'file1.txt')
       const file2 = path.join(dirPath, 'file2.txt')
-      
+
       await fileSystem.writeFile(file1, new TextEncoder().encode('content1'))
       await fileSystem.writeFile(file2, new TextEncoder().encode('content2'))
 
@@ -126,16 +126,18 @@ describe('Node.js Adapters Integration', () => {
       eventBus = new NodeEventBus()
     })
 
-    it('should emit and receive events', (done) => {
+    it('should emit and receive events', async (done) => {
       const testData = { message: 'test event' }
-      
-      const unsubscribe = eventBus.on('test-event', (data) => {
-        expect(data).toEqual(testData)
-        unsubscribe()
-        done()
-      })
 
-      eventBus.emit('test-event', testData)
+      await new Promise<void>((resolve) => {
+        const unsubscribe = eventBus.on('test-event', (data) => {
+          expect(data).toEqual(testData)
+          unsubscribe()
+          resolve()
+        })
+
+        eventBus.emit('test-event', testData)
+      })
     })
 
     it('should handle multiple listeners', () => {
@@ -160,7 +162,7 @@ describe('Node.js Adapters Integration', () => {
 
       eventBus.emit('once-event', testData)
       eventBus.emit('once-event', testData)
-      
+
       expect(count).toBe(1)
       unsubscribe() // Should not throw
     })
@@ -193,7 +195,7 @@ describe('Node.js Adapters Integration', () => {
 
       // This is a basic test - in a real scenario, you'd mock console methods
       expect(logger.getLevel()).toBe('warn')
-      
+
       logger.setLevel('error')
       expect(logger.getLevel()).toBe('error')
     })
@@ -213,7 +215,7 @@ describe('Node.js Adapters Integration', () => {
     it('should provide workspace information', () => {
       expect(workspace.getRootPath()).toBe(workspacePath)
       expect(workspace.getName()).toBe('workspace')
-      
+
       const folders = workspace.getWorkspaceFolders()
       expect(folders).toHaveLength(1)
       expect(folders[0].uri).toBe(workspacePath)
@@ -222,7 +224,7 @@ describe('Node.js Adapters Integration', () => {
     it('should calculate relative paths', () => {
       const fullPath = path.join(workspacePath, 'src', 'test.ts')
       const relativePath = workspace.getRelativePath(fullPath)
-      
+
       expect(relativePath).toBe(path.join('src', 'test.ts'))
     })
 
@@ -230,11 +232,11 @@ describe('Node.js Adapters Integration', () => {
       // Create test files
       const srcDir = path.join(workspacePath, 'src')
       await fileSystem.mkdir(srcDir)
-      
+
       const tsFile = path.join(srcDir, 'test.ts')
       const jsFile = path.join(srcDir, 'test.js')
       const txtFile = path.join(srcDir, 'readme.txt')
-      
+
       await fileSystem.writeFile(tsFile, new TextEncoder().encode('// TypeScript'))
       await fileSystem.writeFile(jsFile, new TextEncoder().encode('// JavaScript'))
       await fileSystem.writeFile(txtFile, new TextEncoder().encode('Text file'))
@@ -291,7 +293,7 @@ describe('Node.js Adapters Integration', () => {
       fileSystem = new NodeFileSystem()
       eventBus = new NodeEventBus()
       configPath = path.join(tempDir, 'test-config.json')
-      
+
       configProvider = new NodeConfigProvider(fileSystem, eventBus, {
         configPath,
         defaultConfig: {
@@ -393,18 +395,18 @@ describe('Node.js Adapters Integration', () => {
       // 2. Create some test files
       const srcDir = path.join(workspacePath, 'src')
       await dependencies.fileSystem.mkdir(srcDir)
-      
+
       const testFile = path.join(srcDir, 'example.ts')
       const content = new TextEncoder().encode(`
         export class ExampleClass {
           constructor(private name: string) {}
-          
+
           greet(): string {
             return \`Hello, \${this.name}!\`
           }
         }
       `)
-      
+
       await dependencies.fileSystem.writeFile(testFile, content)
 
       // 3. Find and verify files

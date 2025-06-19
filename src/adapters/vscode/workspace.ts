@@ -41,7 +41,7 @@ export class VSCodeWorkspace implements IWorkspace {
     ]
   }
 
-  shouldIgnore(path: string): boolean {
+  async shouldIgnore(path: string): Promise<boolean> {
     const ignoreRules = this.getIgnoreRules()
     const relativePath = this.getRelativePath(path)
     

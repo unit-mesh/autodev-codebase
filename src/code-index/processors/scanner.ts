@@ -5,7 +5,7 @@ import { CodeBlock, ICodeParser, IEmbedder, IVectorStore, IDirectoryScanner } fr
 import { IFileSystem, IWorkspace, IPathUtils } from "../../abstractions"
 import { createHash } from "crypto"
 import { v5 as uuidv5 } from "uuid"
-import pLimit from "p-limit"
+// p-limit will be dynamically imported to handle ES module compatibility
 import { Mutex } from "async-mutex"
 import { CacheManager } from "../cache-manager"
 import {
@@ -47,6 +47,9 @@ export class DirectoryScanner implements IDirectoryScanner {
 		onBlocksIndexed?: (indexedCount: number) => void,
 		onFileParsed?: (fileBlockCount: number) => void,
 	): Promise<{ codeBlocks: CodeBlock[]; stats: { processed: number; skipped: number }; totalBlockCount: number }> {
+		// Dynamically import p-limit to handle ES module compatibility
+		const { default: pLimit } = await import('p-limit')
+		
 		const directoryPath = directory
 		// Get all files recursively (handles .gitignore automatically)
 		const [allPaths, _] = await listFiles(directoryPath, true, MAX_LIST_FILES_LIMIT, { pathUtils: this.deps.pathUtils, ripgrepPath: 'rg' })
@@ -55,7 +58,12 @@ export class DirectoryScanner implements IDirectoryScanner {
 		const filePaths = allPaths.filter((p) => !p.endsWith("/"))
 
 		// Filter paths using workspace ignore rules
-		const allowedPaths = filePaths.filter(filePath => !this.deps.workspace.shouldIgnore(filePath))
+		const allowedPaths: string[] = []
+		for (const filePath of filePaths) {
+			if (!(await this.deps.workspace.shouldIgnore(filePath))) {
+				allowedPaths.push(filePath)
+			}
+		}
 
 		// Filter by supported extensions and ignore patterns
 		const supportedPaths = allowedPaths.filter((filePath) => {
