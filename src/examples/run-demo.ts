@@ -325,9 +325,8 @@ async function demonstrateSearch(codeIndexManager: any) {
   }
 }
 
-// Run the demo
-if (require.main === module) {
+
+if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === process.argv[1]) {
   main().catch(console.error)
 }
-
 export { main as runDemo }

@@ -4,14 +4,16 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "module": "./dist/index.js",
+  "type": "module",
   "files": [
     "dist/**/*"
   ],
   "scripts": {
     "build": "rollup -c rollup.config.cjs",
     "dev": "rollup -c rollup.config.cjs --watch",
-    "type-check": "tsc --noEmit",
-    "test": "npx vitest"
+    "type-check": "npx tsc src/examples/run-demo.ts --noEmit",
+    "test": "npx vitest",
+    "demo-tui": "npx tsx src/examples/run-demo-tui.tsx"
   },
   "peerDependencies": {
     "vscode": "^1.74.0"
@@ -26,9 +28,11 @@
     "async-mutex": "^0.5.0",
     "fzf": "^0.5.2",
     "ignore": "^5.3.1",
+    "ink": "^6.0.0",
     "lodash.debounce": "^4.0.8",
     "openai": "^4.52.0",
     "p-limit": "^3.1.0",
+    "react": "^19.1.0",
     "tree-sitter": "^0.21.1",
     "tree-sitter-wasms": "^0.1.12",
     "tslib": "^2.7.0",
@@ -40,9 +44,10 @@
     "@rollup/plugin-node-resolve": "^15.2.3",
     "@rollup/plugin-typescript": "^11.1.6",
     "@types/lodash.debounce": "^4.0.9",
+    "@types/react": "^19.1.8",
     "@types/uuid": "^10.0.0",
     "rollup": "^4.21.2",
-    "ts-node": "^10.9.2",
+    "tsx": "^4.20.3",
     "typescript": "^5.6.2"
   }
 }
