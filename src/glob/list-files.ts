@@ -1,4 +1,4 @@
-import os from "os"
+import * as os from "os"
 import * as fs from "fs"
 import * as childProcess from "child_process"
 import { IPathUtils } from "../abstractions"
@@ -317,7 +317,7 @@ function formatAndCombineResults(files: string[], directories: string[], limit: 
 	const allPaths = [...directories, ...files]
 
 	// Deduplicate paths (a directory might appear in both lists)
-	const uniquePaths = [...new Set(allPaths)]
+	const uniquePaths = Array.from(new Set(allPaths))
 
 	// Sort to ensure directories come first, followed by files
 	uniquePaths.sort((a: string, b: string) => {

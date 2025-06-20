@@ -2,8 +2,8 @@
  * Node.js Storage Adapter
  * Implements IStorage using file system for cache management
  */
-import path from 'path'
-import os from 'os'
+import * as path from 'path'
+import * as os from 'os'
 import { IStorage } from '../../abstractions/core'
 
 export interface NodeStorageOptions {

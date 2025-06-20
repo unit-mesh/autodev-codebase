@@ -6,7 +6,7 @@
  * with Ollama for embeddings and Qdrant for vector storage.
  */
 
-import path from 'path'
+import * as path from 'path'
 import { fileURLToPath } from 'url'
 import { createNodeDependencies } from '../adapters/nodejs'
 import { CodeIndexManager } from '../code-index/manager'
@@ -100,7 +100,7 @@ async function main() {
     // 6. Start monitoring for progress updates
     console.log('👀 Setting up progress monitoring...')
     const unsubscribeProgress = codeIndexManager.onProgressUpdate((progress) => {
-      console.log(`📊 Progress: ${progress.processedItems}/${progress.totalItems} ${progress.currentItemUnit || 'items'} - ${progress.message}`)
+      console.log(`📊 Progress: ${progress.systemStatus} - ${progress.message}`)
     })
 
     // 7. Start indexing
@@ -119,7 +119,7 @@ async function main() {
     console.log('📈 Final Status Check...')
     const finalStatus = codeIndexManager.getCurrentStatus()
     console.log(`📊 System Status: ${finalStatus.systemStatus}`)
-    console.log(`📦 Total Items: ${finalStatus.totalItems}`)
+    console.log(`📦 Status Message: ${finalStatus.message}`)
     console.log(`🕒 Last Update: ${new Date().toLocaleTimeString()}`)
 
     // Clean up
@@ -326,7 +326,8 @@ async function demonstrateSearch(codeIndexManager: any) {
 }
 
 
-if (import.meta.url === `file://${process.argv[1]}` || import.meta.url === process.argv[1]) {
+const __filename = fileURLToPath(import.meta.url)
+if (process.argv[1] === __filename) {
   main().catch(console.error)
 }
 export { main as runDemo }

@@ -2,7 +2,7 @@
  * Node.js Config Provider Adapter
  * Implements IConfigProvider using JSON configuration files
  */
-import path from 'path'
+import * as path from 'path'
 import { IConfigProvider, EmbedderConfig, VectorStoreConfig, SearchConfig, CodeIndexConfig } from '../../abstractions/config'
 import { EmbedderProvider } from '../../code-index/interfaces/manager'
 import { IFileSystem, IEventBus } from '../../abstractions/core'
@@ -105,7 +105,14 @@ export class NodeConfigProvider implements IConfigProvider {
    */
   async saveConfig(config: Partial<CodeIndexConfig>): Promise<void> {
     try {
-      const newConfig = { ...this.config, ...config }
+      const newConfig: CodeIndexConfig = { 
+        isEnabled: true,
+        isConfigured: true,
+        embedderProvider: 'openai' as const,
+        modelId: 'text-embedding-ada-002',
+        ...this.config, 
+        ...config 
+      }
       const content = JSON.stringify(newConfig, null, 2)
       const encoded = new TextEncoder().encode(content)
 

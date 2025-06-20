@@ -1,5 +1,5 @@
 import { OpenAI } from "openai"
-import { IEmbedder, EmbeddingResponse, EmbedderInfo } from "../../interfaces/embedder"
+import { IEmbedder, EmbeddingResponse, EmbedderInfo } from "../interfaces/embedder"
 import {
 	MAX_BATCH_TOKENS,
 	MAX_ITEM_TOKENS,

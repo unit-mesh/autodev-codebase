@@ -237,8 +237,8 @@ export class CodeIndexConfigManager {
 	 */
 	private _hasVectorDimensionChanged(prevProvider: EmbedderProvider, prevModelId?: string): boolean {
 		const currentProvider = this.embedderProvider
-		const currentModelId = this.modelId ?? getDefaultModelId()
-		const resolvedPrevModelId = prevModelId ?? getDefaultModelId()
+		const currentModelId = this.modelId ?? getDefaultModelId(currentProvider)
+		const resolvedPrevModelId = prevModelId ?? getDefaultModelId(prevProvider)
 
 		// If model IDs are the same and provider is the same, no dimension change
 		if (prevProvider === currentProvider && resolvedPrevModelId === currentModelId) {
@@ -246,8 +246,8 @@ export class CodeIndexConfigManager {
 		}
 
 		// Get vector dimensions for both models
-		const prevDimension = getModelDimension(resolvedPrevModelId)
-		const currentDimension = getModelDimension(currentModelId)
+		const prevDimension = getModelDimension(prevProvider, resolvedPrevModelId)
+		const currentDimension = getModelDimension(currentProvider, currentModelId)
 
 		// If we can't determine dimensions, be safe and restart
 		if (prevDimension === undefined || currentDimension === undefined) {

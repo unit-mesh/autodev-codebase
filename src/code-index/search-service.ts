@@ -24,7 +24,7 @@ export class CodeIndexSearchService {
 	 * @returns Array of search results
 	 * @throws Error if the service is not properly configured or ready
 	 */
-	public async searchIndex(query: string, directoryPrefix?: string): Promise<VectorStoreSearchResult[]> {
+	public async searchIndex(query: string, limit: number = 10): Promise<VectorStoreSearchResult[]> {
 		if (!this.configManager.isFeatureEnabled || !this.configManager.isFeatureConfigured) {
 			throw new Error("Code index feature is disabled or not configured.")
 		}
@@ -45,14 +45,8 @@ export class CodeIndexSearchService {
 				throw new Error("Failed to generate embedding for query.")
 			}
 
-			// Handle directory prefix
-			let normalizedPrefix: string | undefined = undefined
-			if (directoryPrefix) {
-				normalizedPrefix = path.normalize(directoryPrefix)
-			}
-
-			// Perform search
-			const results = await this.vectorStore.search(vector, normalizedPrefix, minScore)
+			// Perform search (no directory prefix filtering for now)
+			const results = await this.vectorStore.search(vector, undefined, minScore)
 			return results
 		} catch (error) {
 			console.error("[CodeIndexSearchService] Error during search:", error)

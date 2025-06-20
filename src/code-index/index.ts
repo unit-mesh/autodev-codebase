@@ -2,7 +2,7 @@
 export * from './manager'
 export * from './config-manager'
 export * from './cache-manager'
-export * from './state-manager'
+export { CodeIndexStateManager } from './state-manager'
 export * from './orchestrator'
 export * from './search-service'
 export * from './service-factory'

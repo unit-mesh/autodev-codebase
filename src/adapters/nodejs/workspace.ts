@@ -2,7 +2,7 @@
  * Node.js Workspace Adapter
  * Implements IWorkspace using Node.js file system operations
  */
-import path from 'path'
+import * as path from 'path'
 import { promises as fs } from 'fs'
 import { IWorkspace, WorkspaceFolder, IPathUtils } from '../../abstractions/workspace'
 import { IFileSystem } from '../../abstractions/core'

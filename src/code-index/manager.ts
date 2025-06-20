@@ -46,7 +46,7 @@ export class CodeIndexManager implements ICodeIndexManager {
 	}
 
 	public static disposeAll(): void {
-		for (const instance of CodeIndexManager.instances.values()) {
+		for (const instance of Array.from(CodeIndexManager.instances.values())) {
 			instance.dispose()
 		}
 		CodeIndexManager.instances.clear()
@@ -262,7 +262,7 @@ export class CodeIndexManager implements ICodeIndexManager {
 			return []
 		}
 		this.assertInitialized()
-		return this._searchService!.searchIndex(query, undefined, limit)
+		return this._searchService!.searchIndex(query, limit)
 	}
 
 	/**

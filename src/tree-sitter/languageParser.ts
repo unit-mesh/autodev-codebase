@@ -76,7 +76,7 @@ export async function loadRequiredLanguageParsers(filesToParse: string[]): Promi
 	await initializeParser()
 	const extensionsToLoad = new Set(filesToParse.map((file) => path.extname(file).toLowerCase().slice(1)))
 	const parsers: LanguageParser = {}
-	for (const ext of extensionsToLoad) {
+	for (const ext of Array.from(extensionsToLoad)) {
 		let language: Parser.Language
 		let query: Parser.Query
 		let parserKey = ext // Default to using extension as key

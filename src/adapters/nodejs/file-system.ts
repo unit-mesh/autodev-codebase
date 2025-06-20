@@ -3,7 +3,7 @@
  * Implements IFileSystem using Node.js fs/promises API
  */
 import { promises as fs } from 'fs'
-import path from 'path'
+import * as path from 'path'
 import { IFileSystem } from '../../abstractions/core'
 
 export class NodeFileSystem implements IFileSystem {

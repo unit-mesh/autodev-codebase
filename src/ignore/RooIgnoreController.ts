@@ -1,6 +1,6 @@
-import path from "path"
+import * as path from "path"
 import { fileExistsAtPath } from "../utils/fs"
-import fs from "fs/promises"
+import { promises as fs } from "fs"
 import ignore, { Ignore } from "ignore"
 import { IFileWatcher, FileWatchEvent } from "../abstractions/core"
 

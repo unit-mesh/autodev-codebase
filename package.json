@@ -11,7 +11,7 @@
   "scripts": {
     "build": "rollup -c rollup.config.cjs",
     "dev": "rollup -c rollup.config.cjs --watch",
-    "type-check": "npx tsc src/examples/run-demo.ts --noEmit",
+    "type-check": "npx tsc --noEmit",
     "test": "npx vitest",
     "demo-tui": "npx tsx src/examples/run-demo-tui.tsx"
   },

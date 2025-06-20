@@ -9,6 +9,7 @@ import { CodeIndexConfigManager } from "./config-manager"
 import { CacheManager } from "./cache-manager"
 import { Ignore } from "ignore"
 import { IEventBus, IFileSystem } from "../abstractions/core"
+import { IWorkspace, IPathUtils } from "../abstractions/workspace"
 
 /**
  * Factory class responsible for creating and configuring code indexing service dependencies.

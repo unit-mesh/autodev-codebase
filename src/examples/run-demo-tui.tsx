@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { render } from 'ink';
-import path from 'path';
+import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { createNodeDependencies } from '../adapters/nodejs';

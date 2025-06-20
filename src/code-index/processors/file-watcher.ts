@@ -247,7 +247,7 @@ export class FileWatcher implements IFileWatcher {
 				
 				itemToText: (item) => item.content || "",
 				itemToFilePath: (item) => item.filePath,
-				getFileHash: (item) => item.newHash,
+				getFileHash: (item) => item.newHash || "",
 				
 				itemToPoint: (item, embedding) => {
 					if (!item.content) {

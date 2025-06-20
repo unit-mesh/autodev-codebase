@@ -1,4 +1,8 @@
 import { VectorStoreSearchResult } from "./vector-store"
+import { IndexingState } from "../state-manager"
+
+// Re-export IndexingState for external use
+export { IndexingState }
 
 /**
  * Interface for the code index manager
@@ -68,7 +72,6 @@ export interface ICodeIndexManager {
 	dispose(): void
 }
 
-export type IndexingState = "Standby" | "Indexing" | "Indexed" | "Error"
 export type EmbedderProvider = "openai" | "ollama" | "openai-compatible"
 
 export interface IndexProgressUpdate {

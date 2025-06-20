@@ -60,7 +60,7 @@ export class NodeFileWatcher implements IFileWatcher {
    * Clean up all watchers
    */
   dispose(): void {
-    for (const watcher of this.watchers.values()) {
+    for (const watcher of Array.from(this.watchers.values())) {
       watcher.close()
     }
     this.watchers.clear()

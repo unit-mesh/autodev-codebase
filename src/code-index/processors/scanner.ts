@@ -300,7 +300,7 @@ export class DirectoryScanner implements IDirectoryScanner {
 			getFileHash: (block) => {
 				// Find the corresponding file info for this block
 				const fileInfo = batchFileInfos.find(info => info.filePath === block.file_path)
-				return fileInfo?.fileHash
+				return fileInfo?.fileHash || ""
 			},
 			
 			itemToPoint: (block, embedding) => {
@@ -322,13 +322,11 @@ export class DirectoryScanner implements IDirectoryScanner {
 			
 			getFilesToDelete: (blocks) => {
 				// Get files that need to be deleted (modified files, not new ones)
-				const uniqueFilePaths = [
-					...new Set(
-						batchFileInfos
-							.filter((info) => !info.isNew) // Only modified files (not new)
-							.map((info) => info.filePath),
-					),
-				]
+				const uniqueFilePaths = Array.from(new Set(
+					batchFileInfos
+						.filter((info) => !info.isNew) // Only modified files (not new)
+						.map((info) => info.filePath),
+				))
 				return uniqueFilePaths
 			},
 			

@@ -1,7 +1,7 @@
 import { OpenAI } from "openai"
-import { OpenAiNativeHandler } from "../../../api/providers/openai-native"
-import { ApiHandlerOptions } from "../shared/api"
-import { IEmbedder, EmbeddingResponse, EmbedderInfo } from "../interfaces"
+// Remove unused import - OpenAiNativeHandler is not used in this file
+import { ApiHandlerOptions } from "../../shared/api"
+import { IEmbedder, EmbeddingResponse, EmbedderInfo } from "../interfaces/embedder"
 import {
 	MAX_BATCH_TOKENS,
 	MAX_ITEM_TOKENS,
@@ -21,7 +21,7 @@ export class OpenAiEmbedder implements IEmbedder {
 	 * @param options API handler options
 	 */
 	constructor(options: ApiHandlerOptions & { openAiEmbeddingModelId?: string }) {
-		const apiKey = this.options.openAiNativeApiKey ?? "not-provided"
+			const apiKey = options.openAiNativeApiKey ?? "not-provided"
 		this.embeddingsClient = new OpenAI({ apiKey })
 		this.defaultModelId = options.openAiEmbeddingModelId || "text-embedding-3-small"
 	}

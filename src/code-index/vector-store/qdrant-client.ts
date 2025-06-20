@@ -131,8 +131,8 @@ export class QdrantVectorStore implements IVectorStore {
 	): Promise<void> {
 		try {
 			const processedPoints = points.map((point) => {
-				if (point.payload?.filePath) {
-					const segments = point.payload.filePath.split(path.sep).filter(Boolean)
+				if (point.payload?.['filePath']) {
+					const segments = point.payload['filePath'].split(path.sep).filter(Boolean)
 					const pathSegments = segments.reduce(
 						(acc: Record<string, string>, segment: string, index: number) => {
 							acc[index.toString()] = segment
@@ -221,7 +221,11 @@ export class QdrantVectorStore implements IVectorStore {
 			const operationResult = await this.client.query(this.collectionName, searchRequest)
 			const filteredPoints = operationResult.points.filter((p) => this.isPayloadValid(p.payload))
 
-			return filteredPoints as VectorStoreSearchResult[]
+			return filteredPoints.map(point => ({
+				id: point.id,
+				score: point.score,
+				payload: point.payload as Payload
+			})) as VectorStoreSearchResult[]
 		} catch (error) {
 			console.error("Failed to search points:", error)
 			throw error

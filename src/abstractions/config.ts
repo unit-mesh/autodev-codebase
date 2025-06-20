@@ -1,9 +1,12 @@
 // Temporary placeholder for ApiHandlerOptions - will be properly defined later
 export interface ApiHandlerOptions {
-  apiKey: string
+  apiKey?: string
   baseUrl?: string
   timeout?: number
   maxRetries?: number
+  openAiNativeApiKey?: string
+  ollamaBaseUrl?: string
+  [key: string]: any
 }
 import { EmbedderProvider } from "../code-index/interfaces/manager"
 
