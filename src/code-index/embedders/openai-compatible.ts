@@ -1,12 +1,12 @@
 import { OpenAI } from "openai"
-import { IEmbedder, EmbeddingResponse, EmbedderInfo } from "../interfaces/embedder"
+import { IEmbedder, EmbeddingResponse, EmbedderInfo } from "../../interfaces/embedder"
 import {
 	MAX_BATCH_TOKENS,
 	MAX_ITEM_TOKENS,
 	MAX_BATCH_RETRIES as MAX_RETRIES,
 	INITIAL_RETRY_DELAY_MS as INITIAL_DELAY_MS,
 } from "../constants"
-import { getDefaultModelId } from "../shared/embeddingModels"
+import { getDefaultModelId } from "../../shared/embeddingModels"
 
 interface EmbeddingItem {
 	embedding: string | number[]

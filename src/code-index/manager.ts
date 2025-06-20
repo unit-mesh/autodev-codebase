@@ -152,12 +152,13 @@ export class CodeIndexManager implements ICodeIndexManager {
 			ignoreInstance.add(ignoreRules)
 
 			// (Re)Create shared service instances  
-			// Note: Service factory still needs to be refactored to remove VSCode dependencies
-			// For now, we'll pass null as context - this will need to be updated when service factory is refactored
 			const { embedder, vectorStore, scanner, fileWatcher } = this._serviceFactory.createServices(
-				null as any, // TODO: Remove when service factory is refactored
+				this.dependencies.fileSystem,
+				this.dependencies.eventBus,
 				this._cacheManager,
 				ignoreInstance,
+				this.dependencies.workspace,
+				this.dependencies.pathUtils
 			)
 
 			// (Re)Initialize orchestrator

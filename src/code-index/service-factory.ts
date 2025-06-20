@@ -1,4 +1,3 @@
-import * as vscode from "vscode"
 import { OpenAiEmbedder } from "./embedders/openai"
 import { CodeIndexOllamaEmbedder } from "./embedders/ollama"
 import { OpenAICompatibleEmbedder } from "./embedders/openai-compatible"
@@ -9,6 +8,7 @@ import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "./interfaces
 import { CodeIndexConfigManager } from "./config-manager"
 import { CacheManager } from "./cache-manager"
 import { Ignore } from "ignore"
+import { IEventBus, IFileSystem } from "../abstractions/core"
 
 /**
  * Factory class responsible for creating and configuring code indexing service dependencies.
@@ -63,11 +63,13 @@ export class CodeIndexServiceFactory {
 	 */
 	public createVectorStore(): IVectorStore {
 		const config = this.configManager.getConfig()
+		console.log(`Debug createVectorStore config:`, JSON.stringify(config, null, 2))
 
 		const provider = config.embedderProvider as EmbedderProvider
 		const defaultModel = getDefaultModelId(provider)
 		// Use the embedding model ID from config, not the chat model IDs
 		const modelId = config.modelId ?? defaultModel
+		console.log(`Debug: provider=${provider}, defaultModel=${defaultModel}, modelId=${modelId}`)
 
 		let vectorSize: number | undefined
 
@@ -79,7 +81,10 @@ export class CodeIndexServiceFactory {
 				vectorSize = getModelDimension(provider, modelId)
 			}
 		} else {
+			console.log(`About to call getModelDimension with provider=${provider}, modelId=${modelId}`)
 			vectorSize = getModelDimension(provider, modelId)
+			console.log(`After getModelDimension call: vectorSize=${vectorSize}`)
+			console.log(`Debug: provider=${provider}, modelId=${modelId}, vectorSize=${vectorSize}`)
 		}
 
 		if (vectorSize === undefined) {
@@ -109,21 +114,34 @@ export class CodeIndexServiceFactory {
 		vectorStore: IVectorStore,
 		parser: ICodeParser,
 		ignoreInstance: Ignore,
+		fileSystem: IFileSystem,
+		workspace: IWorkspace,
+		pathUtils: IPathUtils
 	): DirectoryScanner {
-		return new DirectoryScanner(embedder, vectorStore, parser, this.cacheManager, ignoreInstance)
+		return new DirectoryScanner({
+			embedder,
+			qdrantClient: vectorStore,
+			codeParser: parser,
+			cacheManager: this.cacheManager,
+			ignoreInstance,
+			fileSystem,
+			workspace,
+			pathUtils
+		})
 	}
 
 	/**
 	 * Creates a file watcher instance with its required dependencies.
 	 */
 	public createFileWatcher(
-		context: vscode.ExtensionContext,
+		fileSystem: IFileSystem,
+		eventBus: IEventBus,
 		embedder: IEmbedder,
 		vectorStore: IVectorStore,
 		cacheManager: CacheManager,
 		ignoreInstance: Ignore,
 	): IFileWatcher {
-		return new FileWatcher(this.workspacePath, context, cacheManager, embedder, vectorStore, ignoreInstance)
+		return new FileWatcher(this.workspacePath, fileSystem, eventBus, cacheManager, embedder, vectorStore, ignoreInstance)
 	}
 
 	/**
@@ -131,9 +149,12 @@ export class CodeIndexServiceFactory {
 	 * @throws Error if the service is not properly configured
 	 */
 	public createServices(
-		context: vscode.ExtensionContext,
+		fileSystem: IFileSystem,
+		eventBus: IEventBus,
 		cacheManager: CacheManager,
 		ignoreInstance: Ignore,
+		workspace: IWorkspace,
+		pathUtils: IPathUtils
 	): {
 		embedder: IEmbedder
 		vectorStore: IVectorStore
@@ -148,8 +169,8 @@ export class CodeIndexServiceFactory {
 		const embedder = this.createEmbedder()
 		const vectorStore = this.createVectorStore()
 		const parser = codeParser
-		const scanner = this.createDirectoryScanner(embedder, vectorStore, parser, ignoreInstance)
-		const fileWatcher = this.createFileWatcher(context, embedder, vectorStore, cacheManager, ignoreInstance)
+		const scanner = this.createDirectoryScanner(embedder, vectorStore, parser, ignoreInstance, fileSystem, workspace, pathUtils)
+		const fileWatcher = this.createFileWatcher(fileSystem, eventBus, embedder, vectorStore, cacheManager, ignoreInstance)
 
 		return {
 			embedder,

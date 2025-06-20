@@ -43,3 +43,4 @@ pnpm-debug.log*
 *.zip
 *.tar.gz
 .claude
+*.wasm

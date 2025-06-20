@@ -5,8 +5,9 @@ import { CodeBlock, ICodeParser, IEmbedder, IVectorStore, IDirectoryScanner } fr
 import { IFileSystem, IWorkspace, IPathUtils } from "../../abstractions"
 import { createHash } from "crypto"
 import { v5 as uuidv5 } from "uuid"
-// p-limit will be dynamically imported to handle ES module compatibility
+// p-limit for concurrency control
 import { Mutex } from "async-mutex"
+import pLimit from "p-limit"
 import { CacheManager } from "../cache-manager"
 import {
 	QDRANT_CODE_BLOCK_NAMESPACE,
@@ -47,30 +48,39 @@ export class DirectoryScanner implements IDirectoryScanner {
 		onBlocksIndexed?: (indexedCount: number) => void,
 		onFileParsed?: (fileBlockCount: number) => void,
 	): Promise<{ codeBlocks: CodeBlock[]; stats: { processed: number; skipped: number }; totalBlockCount: number }> {
-		// Dynamically import p-limit to handle ES module compatibility
-		const { default: pLimit } = await import('p-limit')
-		
 		const directoryPath = directory
+		console.log(`[Scanner] Scanning directory: ${directoryPath}`)
 		// Get all files recursively (handles .gitignore automatically)
 		const [allPaths, _] = await listFiles(directoryPath, true, MAX_LIST_FILES_LIMIT, { pathUtils: this.deps.pathUtils, ripgrepPath: 'rg' })
+		console.log(`[Scanner] Found ${allPaths.length} paths from listFiles:`, allPaths.slice(0, 10))
 
 		// Filter out directories (marked with trailing '/')
 		const filePaths = allPaths.filter((p) => !p.endsWith("/"))
+		console.log(`[Scanner] After filtering directories: ${filePaths.length} files:`, filePaths.slice(0, 10))
 
 		// Filter paths using workspace ignore rules
 		const allowedPaths: string[] = []
 		for (const filePath of filePaths) {
-			if (!(await this.deps.workspace.shouldIgnore(filePath))) {
+			const shouldIgnore = await this.deps.workspace.shouldIgnore(filePath)
+			console.log(`[Scanner] shouldIgnore(${filePath}): ${shouldIgnore}`)
+			if (!shouldIgnore) {
 				allowedPaths.push(filePath)
 			}
 		}
+		console.log(`[Scanner] After workspace ignore rules: ${allowedPaths.length} files:`, allowedPaths)
 
 		// Filter by supported extensions and ignore patterns
 		const supportedPaths = allowedPaths.filter((filePath) => {
 			const ext = this.deps.pathUtils.extname(filePath).toLowerCase()
 			const relativeFilePath = this.deps.workspace.getRelativePath(filePath)
-			return scannerExtensions.includes(ext) && !this.deps.ignoreInstance.ignores(relativeFilePath)
+			const extSupported = scannerExtensions.includes(ext)
+			const ignoreInstanceIgnores = this.deps.ignoreInstance.ignores(relativeFilePath)
+			
+			console.log(`[Scanner] File: ${filePath}, ext: ${ext}, extSupported: ${extSupported}, ignoreInstanceIgnores: ${ignoreInstanceIgnores}`)
+			
+			return extSupported && !ignoreInstanceIgnores
 		})
+		console.log(`[Scanner] After extension and ignore filtering: ${supportedPaths.length} files:`, supportedPaths)
 
 		// Initialize tracking variables
 		const processedFiles = new Set<string>()
@@ -92,13 +102,18 @@ export class DirectoryScanner implements IDirectoryScanner {
 		// Initialize block counter
 		let totalBlockCount = 0
 
+		console.log(`[Scanner] Starting to process ${supportedPaths.length} supported files`)
+		
 		// Process all files in parallel with concurrency control
 		const parsePromises = supportedPaths.map((filePath) =>
 			parseLimiter(async () => {
 				try {
+					console.log(`[Scanner] Processing file: ${filePath}`)
 					// Check file size
 					const stats = await this.deps.fileSystem.stat(filePath)
+					console.log(`[Scanner] File ${filePath} size: ${stats.size} bytes (limit: ${MAX_FILE_SIZE_BYTES})`)
 					if (stats.size > MAX_FILE_SIZE_BYTES) {
+						console.log(`[Scanner] Skipping large file: ${filePath}`)
 						skippedCount++ // Skip large files
 						return
 					}
@@ -113,8 +128,10 @@ export class DirectoryScanner implements IDirectoryScanner {
 
 					// Check against cache
 					const cachedFileHash = this.deps.cacheManager.getHash(filePath)
+					console.log(`[Scanner] File ${filePath}: cachedHash=${cachedFileHash}, currentHash=${currentFileHash}`)
 					if (cachedFileHash === currentFileHash) {
 						// File is unchanged
+						console.log(`[Scanner] Skipping unchanged file: ${filePath}`)
 						skippedCount++
 						return
 					}
@@ -239,6 +256,8 @@ export class DirectoryScanner implements IDirectoryScanner {
 				}
 			}
 		}
+
+		console.log(`[Scanner] Final results: ${codeBlocks.length} code blocks, processed: ${processedCount}, skipped: ${skippedCount}, totalBlockCount: ${totalBlockCount}`)
 
 		return {
 			codeBlocks,

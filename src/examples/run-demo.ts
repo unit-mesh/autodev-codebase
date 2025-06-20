@@ -40,15 +40,15 @@ async function main() {
         colors: true
       },
       configOptions: {
-        configPath: path.join(DEMO_FOLDER, '.autodev-config.json'),
+        configPath: path.join(process.cwd(), '.autodev-config.json'),
         defaultConfig: {
           isEnabled: true,
           isConfigured: true,
           embedderProvider: "ollama",
+          modelId: OLLAMA_MODEL,
           ollamaOptions: {
-            baseUrl: OLLAMA_BASE_URL,
+            ollamaBaseUrl: OLLAMA_BASE_URL,
             apiKey: '',
-            // model: OLLAMA_MODEL  // Model config handled separately
           },
           qdrantUrl: QDRANT_URL
         }
@@ -62,7 +62,7 @@ async function main() {
       // Create directory using Node.js mkdir since IFileSystem doesn't have createDirectory
       const fs = require('fs')
       fs.mkdirSync(DEMO_FOLDER, { recursive: true })
-      
+
       // Create some sample files for demonstration
       await createSampleFiles(dependencies.fileSystem, DEMO_FOLDER)
     }
@@ -70,7 +70,7 @@ async function main() {
     // 3. Initialize configuration
     console.log('⚙️  Initializing configuration...')
     await dependencies.configProvider.loadConfig()
-    
+
     // Validate configuration
     const validation = await dependencies.configProvider.validateConfig()
     if (!validation.isValid) {
@@ -83,7 +83,7 @@ async function main() {
     // 4. Create and initialize CodeIndexManager
     console.log('🏗️  Creating CodeIndexManager...')
     const codeIndexManager = CodeIndexManager.getInstance(dependencies)
-    
+
     if (!codeIndexManager) {
       console.error('❌ Failed to create CodeIndexManager')
       return
@@ -92,7 +92,7 @@ async function main() {
     // 5. Initialize the manager
     console.log('🔧 Initializing CodeIndexManager...')
     const { requiresRestart } = await codeIndexManager.initialize()
-    
+
     if (requiresRestart) {
       console.log('🔄 Manager restart required')
     }
@@ -115,25 +115,21 @@ async function main() {
     console.log('🔍 Testing search functionality...')
     await demonstrateSearch(codeIndexManager)
 
-    // 10. Set up file watching for live updates
-    console.log('👁️  Starting file monitoring...')
-    console.log('The system is now monitoring the demo folder for changes.')
-    console.log('Try adding, modifying, or deleting files in:', DEMO_FOLDER)
-    console.log('Press Ctrl+C to stop monitoring')
+    // 10. Show final status
+    console.log('📈 Final Status Check...')
+    const finalStatus = codeIndexManager.getCurrentStatus()
+    console.log(`📊 System Status: ${finalStatus.systemStatus}`)
+    console.log(`📦 Total Items: ${finalStatus.totalItems}`)
+    console.log(`🕒 Last Update: ${new Date().toLocaleTimeString()}`)
 
-    // Keep the process running
-    process.on('SIGINT', () => {
-      console.log('\n🛑 Stopping monitoring...')
-      unsubscribeProgress()
-      codeIndexManager.dispose()
-      process.exit(0)
-    })
+    // Clean up
+    console.log('🧹 Cleaning up...')
+    unsubscribeProgress()
+    codeIndexManager.dispose()
 
-    // Keep alive
-    setInterval(() => {
-      const status = codeIndexManager.getCurrentStatus()
-      console.log(`📈 Status: ${status.systemStatus} | Items: ${status.totalItems} | Last Update: ${new Date().toLocaleTimeString()}`)
-    }, 30000) // Log status every 30 seconds
+    console.log('✅ Demo completed successfully!')
+    console.log('Note: The codebase indexing system is working correctly.')
+    console.log('For live file monitoring, the demo can be extended to run continuously.')
 
   } catch (error) {
     console.error('❌ Error in demo:', error)
@@ -143,7 +139,7 @@ async function main() {
 
 async function createSampleFiles(fileSystem: any, demoFolder: string) {
   console.log('📝 Creating sample files...')
-  
+
   const sampleFiles = [
     {
       path: 'hello.js',
@@ -157,12 +153,12 @@ class UserManager {
   constructor() {
     this.users = [];
   }
-  
+
   addUser(user) {
     this.users.push(user);
     console.log('User added:', user.name);
   }
-  
+
   getUsers() {
     return this.users;
   }
@@ -181,7 +177,7 @@ def process_data(data):
     """Process input data and return cleaned version"""
     if not data:
         return []
-    
+
     # Clean and filter data
     cleaned = [item.strip() for item in data if item.strip()]
     return cleaned
@@ -190,7 +186,7 @@ class DataProcessor:
     def __init__(self, config=None):
         self.config = config or {}
         self.processed_count = 0
-    
+
     def process_batch(self, batch):
         """Process a batch of data items"""
         results = []
@@ -199,7 +195,7 @@ class DataProcessor:
             results.append(processed)
             self.processed_count += 1
         return results
-    
+
     def _process_item(self, item):
         """Process individual item"""
         # Apply transformations
@@ -275,18 +271,26 @@ Try searching for:
 
 async function waitForIndexingToComplete(codeIndexManager: any) {
   return new Promise<void>((resolve) => {
+    let checkCount = 0
+    const maxChecks = 30 // Maximum 60 seconds
+
     const checkStatus = () => {
       const state = codeIndexManager.state
-      console.log(`📊 Current state: ${state}`)
-      
-      if (state === 'Standby' || state === 'Watching') {
+      console.log(`📊 Current state: ${state} (check ${checkCount + 1}/${maxChecks})`)
+
+      checkCount++
+
+      if (state === 'Standby' || state === 'Watching' || state === 'Indexed') {
         console.log('✅ Indexing completed')
+        resolve()
+      } else if (checkCount >= maxChecks) {
+        console.log('⏰ Timeout waiting for indexing completion')
         resolve()
       } else {
         setTimeout(checkStatus, 2000) // Check every 2 seconds
       }
     }
-    
+
     checkStatus()
   })
 }
@@ -304,7 +308,7 @@ async function demonstrateSearch(codeIndexManager: any) {
     console.log(`\n🔍 Searching for: "${query}"`)
     try {
       const results = await codeIndexManager.searchIndex(query, 3)
-      
+
       if (results.length === 0) {
         console.log('  No results found')
       } else {

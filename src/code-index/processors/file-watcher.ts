@@ -1,4 +1,5 @@
-import * as vscode from "vscode"
+import * as fs from "fs"
+import * as path from "path"
 import {
 	QDRANT_CODE_BLOCK_NAMESPACE,
 	MAX_FILE_SIZE_BYTES,
@@ -7,7 +8,7 @@ import {
 	INITIAL_RETRY_DELAY_MS,
 } from "../constants"
 import { createHash } from "crypto"
-import { RooIgnoreController } from "../../../core/ignore/RooIgnoreController"
+import { RooIgnoreController } from "../../ignore/RooIgnoreController"
 import { v5 as uuidv5 } from "uuid"
 import { Ignore } from "ignore"
 import { scannerExtensions } from "../shared/supported-extensions"
@@ -22,21 +23,22 @@ import {
 import { codeParser } from "./parser"
 import { CacheManager } from "../cache-manager"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
-import { IEventBus } from "../../abstractions/core"
+import { IEventBus, IFileSystem } from "../../abstractions/core"
 
 /**
  * Implementation of the file watcher interface
  */
 export class FileWatcher implements IFileWatcher {
 	private ignoreInstance?: Ignore
-	private fileWatcher?: vscode.FileSystemWatcher
+	private fileWatcher?: fs.FSWatcher
 	private ignoreController: RooIgnoreController
-	private accumulatedEvents: Map<string, { uri: vscode.Uri; type: "create" | "change" | "delete" }> = new Map()
+	private accumulatedEvents: Map<string, { filePath: string; type: "create" | "change" | "delete" }> = new Map()
 	private batchProcessDebounceTimer?: NodeJS.Timeout
 	private readonly BATCH_DEBOUNCE_DELAY_MS = 500
 	private readonly FILE_PROCESSING_CONCURRENCY_LIMIT = 10
 
 	private eventBus: IEventBus
+	private fileSystem: IFileSystem
 
 	/**
 	 * Event emitted when a batch of files begins processing
@@ -60,7 +62,7 @@ export class FileWatcher implements IFileWatcher {
 	/**
 	 * Creates a new file watcher
 	 * @param workspacePath Path to the workspace
-	 * @param context VS Code extension context
+	 * @param fileSystem File system abstraction
 	 * @param eventBus Event bus for emitting events
 	 * @param embedder Optional embedder
 	 * @param vectorStore Optional vector store
@@ -68,7 +70,7 @@ export class FileWatcher implements IFileWatcher {
 	 */
 	constructor(
 		private workspacePath: string,
-		private context: vscode.ExtensionContext,
+		fileSystem: IFileSystem,
 		eventBus: IEventBus,
 		private readonly cacheManager: CacheManager,
 		private embedder?: IEmbedder,
@@ -77,6 +79,7 @@ export class FileWatcher implements IFileWatcher {
 		ignoreController?: RooIgnoreController,
 	) {
 		this.eventBus = eventBus
+		this.fileSystem = fileSystem
 		this.ignoreController = ignoreController || new RooIgnoreController(workspacePath)
 		if (ignoreInstance) {
 			this.ignoreInstance = ignoreInstance
@@ -92,24 +95,39 @@ export class FileWatcher implements IFileWatcher {
 	 * Initializes the file watcher
 	 */
 	async initialize(): Promise<void> {
-		// Create file watcher
-		const filePattern = new vscode.RelativePattern(
-			this.workspacePath,
-			`**/*{${scannerExtensions.map((e) => e.substring(1)).join(",")}}`,
-		)
-		this.fileWatcher = vscode.workspace.createFileSystemWatcher(filePattern)
+		// Create file watcher using Node.js fs.watch
+		this.fileWatcher = fs.watch(this.workspacePath, { recursive: true }, (eventType, filename) => {
+			if (!filename) return
 
-		// Register event handlers
-		this.fileWatcher.onDidCreate(this.handleFileCreated.bind(this))
-		this.fileWatcher.onDidChange(this.handleFileChanged.bind(this))
-		this.fileWatcher.onDidDelete(this.handleFileDeleted.bind(this))
+			const fullPath = path.join(this.workspacePath, filename)
+
+			// Check if file extension is supported
+			const ext = path.extname(fullPath)
+			if (!scannerExtensions.includes(ext)) return
+
+			// Handle different event types
+			if (eventType === 'rename') {
+				// Check if file exists to determine if it's create or delete
+				fs.access(fullPath, fs.constants.F_OK, (err) => {
+					if (err) {
+						// File doesn't exist, it was deleted
+						this.handleFileDeleted(fullPath)
+					} else {
+						// File exists, it was created
+						this.handleFileCreated(fullPath)
+					}
+				})
+			} else if (eventType === 'change') {
+				this.handleFileChanged(fullPath)
+			}
+		})
 	}
 
 	/**
 	 * Disposes the file watcher
 	 */
 	dispose(): void {
-		this.fileWatcher?.dispose()
+		this.fileWatcher?.close()
 		if (this.batchProcessDebounceTimer) {
 			clearTimeout(this.batchProcessDebounceTimer)
 		}
@@ -119,28 +137,28 @@ export class FileWatcher implements IFileWatcher {
 
 	/**
 	 * Handles file creation events
-	 * @param uri URI of the created file
+	 * @param filePath Path of the created file
 	 */
-	private async handleFileCreated(uri: vscode.Uri): Promise<void> {
-		this.accumulatedEvents.set(uri.fsPath, { uri, type: "create" })
+	private async handleFileCreated(filePath: string): Promise<void> {
+		this.accumulatedEvents.set(filePath, { filePath, type: "create" })
 		this.scheduleBatchProcessing()
 	}
 
 	/**
 	 * Handles file change events
-	 * @param uri URI of the changed file
+	 * @param filePath Path of the changed file
 	 */
-	private async handleFileChanged(uri: vscode.Uri): Promise<void> {
-		this.accumulatedEvents.set(uri.fsPath, { uri, type: "change" })
+	private async handleFileChanged(filePath: string): Promise<void> {
+		this.accumulatedEvents.set(filePath, { filePath, type: "change" })
 		this.scheduleBatchProcessing()
 	}
 
 	/**
 	 * Handles file deletion events
-	 * @param uri URI of the deleted file
+	 * @param filePath Path of the deleted file
 	 */
-	private async handleFileDeleted(uri: vscode.Uri): Promise<void> {
-		this.accumulatedEvents.set(uri.fsPath, { uri, type: "delete" })
+	private async handleFileDeleted(filePath: string): Promise<void> {
+		this.accumulatedEvents.set(filePath, { filePath, type: "delete" })
 		this.scheduleBatchProcessing()
 	}
 
@@ -180,7 +198,7 @@ export class FileWatcher implements IFileWatcher {
 		processedCountInBatch: number,
 		totalFilesInBatch: number,
 		pathsToExplicitlyDelete: string[],
-		filesToUpsertDetails: Array<{ path: string; uri: vscode.Uri; originalType: "create" | "change" }>,
+		filesToUpsertDetails: Array<{ path: string; filePath: string; originalType: "create" | "change" }>,
 	): Promise<{ overallBatchError?: Error; clearedPaths: Set<string>; processedCount: number }> {
 		let overallBatchError: Error | undefined
 		const allPathsToClearFromDB = new Set<string>(pathsToExplicitlyDelete)
@@ -223,7 +241,7 @@ export class FileWatcher implements IFileWatcher {
 	}
 
 	private async _processFilesAndPrepareUpserts(
-		filesToUpsertDetails: Array<{ path: string; uri: vscode.Uri; originalType: "create" | "change" }>,
+		filesToUpsertDetails: Array<{ path: string; filePath: string; originalType: "create" | "change" }>,
 		batchResults: FileProcessingResult[],
 		processedCountInBatch: number,
 		totalFilesInBatch: number,
@@ -369,7 +387,7 @@ export class FileWatcher implements IFileWatcher {
 	}
 
 	private async processBatch(
-		eventsToProcess: Map<string, { uri: vscode.Uri; type: "create" | "change" | "delete" }>,
+		eventsToProcess: Map<string, { filePath: string; type: "create" | "change" | "delete" }>,
 	): Promise<void> {
 		const batchResults: FileProcessingResult[] = []
 		let processedCountInBatch = 0
@@ -385,15 +403,15 @@ export class FileWatcher implements IFileWatcher {
 
 		// Categorize events
 		const pathsToExplicitlyDelete: string[] = []
-		const filesToUpsertDetails: Array<{ path: string; uri: vscode.Uri; originalType: "create" | "change" }> = []
+		const filesToUpsertDetails: Array<{ path: string; filePath: string; originalType: "create" | "change" }> = []
 
 		for (const event of eventsToProcess.values()) {
 			if (event.type === "delete") {
-				pathsToExplicitlyDelete.push(event.uri.fsPath)
+				pathsToExplicitlyDelete.push(event.filePath)
 			} else {
 				filesToUpsertDetails.push({
-					path: event.uri.fsPath,
-					uri: event.uri,
+					path: event.filePath,
+					filePath: event.filePath,
 					originalType: event.type,
 				})
 			}
@@ -472,7 +490,7 @@ export class FileWatcher implements IFileWatcher {
 			}
 
 			// Check file size
-			const fileStat = await vscode.workspace.fs.stat(vscode.Uri.file(filePath))
+			const fileStat = await this.fileSystem.stat(filePath)
 			if (fileStat.size > MAX_FILE_SIZE_BYTES) {
 				return {
 					path: filePath,
@@ -482,8 +500,8 @@ export class FileWatcher implements IFileWatcher {
 			}
 
 			// Read file content
-			const fileContent = await vscode.workspace.fs.readFile(vscode.Uri.file(filePath))
-			const content = fileContent.toString()
+			const fileContent = await this.fileSystem.readFile(filePath)
+			const content = new TextDecoder().decode(fileContent)
 
 			// Calculate hash
 			const newHash = createHash("sha256").update(content).digest("hex")

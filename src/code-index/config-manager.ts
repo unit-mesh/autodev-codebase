@@ -92,7 +92,7 @@ export class CodeIndexConfigManager {
 			embedderProvider: this.embedderProvider,
 			modelId: this.modelId,
 			openAiKey: this.openAiOptions?.apiKey ?? "",
-			ollamaBaseUrl: this.ollamaOptions?.baseUrl ?? "",
+			ollamaBaseUrl: this.ollamaOptions?.ollamaBaseUrl ?? "",
 			openAiCompatibleBaseUrl: this.openAiCompatibleOptions?.baseUrl ?? "",
 			openAiCompatibleApiKey: this.openAiCompatibleOptions?.apiKey ?? "",
 			openAiCompatibleModelDimension: this.openAiCompatibleOptions?.modelDimension,
@@ -134,7 +134,7 @@ export class CodeIndexConfigManager {
 			return isConfigured
 		} else if (this.embedderProvider === "ollama") {
 			// Ollama model ID has a default, so only base URL is strictly required for config
-			const ollamaBaseUrl = this.ollamaOptions?.baseUrl
+			const ollamaBaseUrl = this.ollamaOptions?.ollamaBaseUrl
 			const qdrantUrl = this.qdrantUrl
 			const isConfigured = !!(ollamaBaseUrl && qdrantUrl)
 			return isConfigured

@@ -23,7 +23,7 @@ export class NodeConfigProvider implements IConfigProvider {
     options: NodeConfigOptions = {}
   ) {
     this.configPath = options.configPath || './autodev-config.json'
-    
+
     // Set default configuration
     this.config = {
       isEnabled: false,
@@ -66,7 +66,7 @@ export class NodeConfigProvider implements IConfigProvider {
 
   onConfigChange(callback: (config: CodeIndexConfig) => void): () => void {
     this.changeCallbacks.push(callback)
-    
+
     // Return unsubscribe function
     return () => {
       const index = this.changeCallbacks.indexOf(callback)
@@ -85,7 +85,7 @@ export class NodeConfigProvider implements IConfigProvider {
         const content = await this.fileSystem.readFile(this.configPath)
         const text = new TextDecoder().decode(content)
         const fileConfig = JSON.parse(text)
-        
+
         this.config = {
           isEnabled: false,
           isConfigured: false,
@@ -96,7 +96,7 @@ export class NodeConfigProvider implements IConfigProvider {
     } catch (error) {
       console.warn(`Failed to load config from ${this.configPath}:`, error)
     }
-    
+
     return this.config!
   }
 
@@ -108,10 +108,10 @@ export class NodeConfigProvider implements IConfigProvider {
       const newConfig = { ...this.config, ...config }
       const content = JSON.stringify(newConfig, null, 2)
       const encoded = new TextEncoder().encode(content)
-      
+
       await this.fileSystem.writeFile(this.configPath, encoded)
       this.config = newConfig
-      
+
       // Notify listeners
       this.changeCallbacks.forEach(callback => {
         try {
@@ -120,10 +120,10 @@ export class NodeConfigProvider implements IConfigProvider {
           console.error('Error in config change callback:', error)
         }
       })
-      
+
       // Emit event
       this.eventBus.emit('config:changed', newConfig)
-      
+
     } catch (error) {
       throw new Error(`Failed to save config to ${this.configPath}: ${error}`)
     }
@@ -133,7 +133,7 @@ export class NodeConfigProvider implements IConfigProvider {
    * Update a specific configuration value
    */
   async updateConfig<K extends keyof CodeIndexConfig>(
-    key: K, 
+    key: K,
     value: CodeIndexConfig[K]
   ): Promise<void> {
     await this.saveConfig({ [key]: value })
@@ -148,7 +148,7 @@ export class NodeConfigProvider implements IConfigProvider {
       isConfigured: false,
       embedderProvider: "openai"
     }
-    
+
     await this.saveConfig(defaultConfig)
   }
 
@@ -178,7 +178,7 @@ export class NodeConfigProvider implements IConfigProvider {
         }
         break
       case "ollama":
-        if (!config.ollamaOptions?.baseUrl) {
+        if (!config.ollamaOptions?.ollamaBaseUrl) {
           errors.push('Ollama base URL is required')
         }
         break

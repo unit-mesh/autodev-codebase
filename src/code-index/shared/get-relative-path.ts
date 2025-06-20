@@ -1,5 +1,5 @@
 import path from "path"
-import { getWorkspacePath } from "../../../utils/path"
+import { getWorkspacePath } from "../../utils/path"
 
 /**
  * Generates a normalized absolute path from a given file path and workspace root.

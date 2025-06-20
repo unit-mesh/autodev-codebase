@@ -10,7 +10,7 @@ import { CacheManager } from "./cache-manager"
  * Manages the code indexing workflow, coordinating between different services and managers.
  */
 export class CodeIndexOrchestrator {
-	private _fileWatcherSubscriptions: vscode.Disposable[] = []
+	private _fileWatcherSubscriptions: (() => void)[] = []
 	private _isProcessing: boolean = false
 
 	constructor(
@@ -173,7 +173,7 @@ export class CodeIndexOrchestrator {
 	 */
 	public stopWatcher(): void {
 		this.fileWatcher.dispose()
-		this._fileWatcherSubscriptions.forEach((sub) => sub.dispose())
+		this._fileWatcherSubscriptions.forEach((unsubscribe) => unsubscribe())
 		this._fileWatcherSubscriptions = []
 
 		if (this.stateManager.state !== "Error") {
