@@ -44,3 +44,5 @@ pnpm-debug.log*
 *.tar.gz
 .claude
 *.wasm
+/demo
+/.autodev-cache

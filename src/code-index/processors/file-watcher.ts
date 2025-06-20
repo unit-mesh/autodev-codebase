@@ -20,6 +20,7 @@ import {
 	PointStruct,
 	BatchProcessingSummary,
 } from "../interfaces"
+import { BatchProcessor, BatchProcessorOptions } from "./batch-processor"
 import { codeParser } from "./parser"
 import { CacheManager } from "../cache-manager"
 import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
@@ -39,6 +40,7 @@ export class FileWatcher implements IFileWatcher {
 
 	private eventBus: IEventBus
 	private fileSystem: IFileSystem
+	private batchProcessor: BatchProcessor<{ filePath: string; type: "create" | "change" | "delete"; content?: string; newHash?: string }>
 
 	/**
 	 * Event emitted when a batch of files begins processing
@@ -81,6 +83,7 @@ export class FileWatcher implements IFileWatcher {
 		this.eventBus = eventBus
 		this.fileSystem = fileSystem
 		this.ignoreController = ignoreController || new RooIgnoreController(workspacePath)
+		this.batchProcessor = new BatchProcessor()
 		if (ignoreInstance) {
 			this.ignoreInstance = ignoreInstance
 		}
@@ -186,214 +189,19 @@ export class FileWatcher implements IFileWatcher {
 		const filePathsInBatch = Array.from(eventsToProcess.keys())
 		this.eventBus.emit('batch-start', filePathsInBatch)
 
-		await this.processBatch(eventsToProcess)
+		await this.processBatch(Array.from(eventsToProcess.values()))
 	}
 
 	/**
-	 * Processes a batch of accumulated events
-	 * @param eventsToProcess Map of events to process
+	 * Processes a batch of accumulated events using the BatchProcessor
+	 * @param events Array of events to process
 	 */
-	private async _handleBatchDeletions(
-		batchResults: FileProcessingResult[],
-		processedCountInBatch: number,
-		totalFilesInBatch: number,
-		pathsToExplicitlyDelete: string[],
-		filesToUpsertDetails: Array<{ path: string; filePath: string; originalType: "create" | "change" }>,
-	): Promise<{ overallBatchError?: Error; clearedPaths: Set<string>; processedCount: number }> {
-		let overallBatchError: Error | undefined
-		const allPathsToClearFromDB = new Set<string>(pathsToExplicitlyDelete)
-
-		for (const fileDetail of filesToUpsertDetails) {
-			if (fileDetail.originalType === "change") {
-				allPathsToClearFromDB.add(fileDetail.path)
-			}
-		}
-
-		if (allPathsToClearFromDB.size > 0 && this.vectorStore) {
-			try {
-				await this.vectorStore.deletePointsByMultipleFilePaths(Array.from(allPathsToClearFromDB))
-
-				for (const path of pathsToExplicitlyDelete) {
-					this.cacheManager.deleteHash(path)
-					batchResults.push({ path, status: "success" })
-					processedCountInBatch++
-					this.eventBus.emit('batch-progress', {
-						processedInBatch: processedCountInBatch,
-						totalInBatch: totalFilesInBatch,
-						currentFile: path,
-					})
-				}
-			} catch (error) {
-				overallBatchError = error as Error
-				for (const path of pathsToExplicitlyDelete) {
-					batchResults.push({ path, status: "error", error: error as Error })
-					processedCountInBatch++
-					this.eventBus.emit('batch-progress', {
-						processedInBatch: processedCountInBatch,
-						totalInBatch: totalFilesInBatch,
-						currentFile: path,
-					})
-				}
-			}
-		}
-
-		return { overallBatchError, clearedPaths: allPathsToClearFromDB, processedCount: processedCountInBatch }
-	}
-
-	private async _processFilesAndPrepareUpserts(
-		filesToUpsertDetails: Array<{ path: string; filePath: string; originalType: "create" | "change" }>,
-		batchResults: FileProcessingResult[],
-		processedCountInBatch: number,
-		totalFilesInBatch: number,
-		pathsToExplicitlyDelete: string[],
-	): Promise<{
-		pointsForBatchUpsert: PointStruct[]
-		successfullyProcessedForUpsert: Array<{ path: string; newHash?: string }>
-		processedCount: number
-	}> {
-		const pointsForBatchUpsert: PointStruct[] = []
-		const successfullyProcessedForUpsert: Array<{ path: string; newHash?: string }> = []
-		const filesToProcessConcurrently = [...filesToUpsertDetails]
-
-		for (let i = 0; i < filesToProcessConcurrently.length; i += this.FILE_PROCESSING_CONCURRENCY_LIMIT) {
-			const chunkToProcess = filesToProcessConcurrently.slice(i, i + this.FILE_PROCESSING_CONCURRENCY_LIMIT)
-
-			const chunkProcessingPromises = chunkToProcess.map(async (fileDetail) => {
-				this.eventBus.emit('batch-progress', {
-					processedInBatch: processedCountInBatch,
-					totalInBatch: totalFilesInBatch,
-					currentFile: fileDetail.path,
-				})
-				try {
-					const result = await this.processFile(fileDetail.path)
-					return { path: fileDetail.path, result: result, error: undefined }
-				} catch (e) {
-					console.error(`[FileWatcher] Unhandled exception processing file ${fileDetail.path}:`, e)
-					return { path: fileDetail.path, result: undefined, error: e as Error }
-				}
-			})
-
-			const settledChunkResults = await Promise.allSettled(chunkProcessingPromises)
-
-			for (const settledResult of settledChunkResults) {
-				let resultPath: string | undefined
-
-				if (settledResult.status === "fulfilled") {
-					const { path, result, error: directError } = settledResult.value
-					resultPath = path
-
-					if (directError) {
-						batchResults.push({ path, status: "error", error: directError })
-					} else if (result) {
-						if (result.status === "skipped" || result.status === "local_error") {
-							batchResults.push(result)
-						} else if (result.status === "processed_for_batching" && result.pointsToUpsert) {
-							pointsForBatchUpsert.push(...result.pointsToUpsert)
-							if (result.path && result.newHash) {
-								successfullyProcessedForUpsert.push({ path: result.path, newHash: result.newHash })
-							} else if (result.path && !result.newHash) {
-								successfullyProcessedForUpsert.push({ path: result.path })
-							}
-						} else {
-							batchResults.push({
-								path,
-								status: "error",
-								error: new Error(
-									`Unexpected result status from processFile: ${result.status} for file ${path}`,
-								),
-							})
-						}
-					} else {
-						batchResults.push({
-							path,
-							status: "error",
-							error: new Error(`Fulfilled promise with no result or error for file ${path}`),
-						})
-					}
-				} else {
-					console.error("[FileWatcher] A file processing promise was rejected:", settledResult.reason)
-					batchResults.push({
-						path: settledResult.reason?.path || "unknown",
-						status: "error",
-						error: settledResult.reason as Error,
-					})
-				}
-
-				if (!pathsToExplicitlyDelete.includes(resultPath || "")) {
-					processedCountInBatch++
-				}
-				this.eventBus.emit('batch-progress', {
-					processedInBatch: processedCountInBatch,
-					totalInBatch: totalFilesInBatch,
-					currentFile: resultPath,
-				})
-			}
-		}
-
-		return { pointsForBatchUpsert, successfullyProcessedForUpsert, processedCount: processedCountInBatch }
-	}
-
-	private async _executeBatchUpsertOperations(
-		pointsForBatchUpsert: PointStruct[],
-		successfullyProcessedForUpsert: Array<{ path: string; newHash?: string }>,
-		batchResults: FileProcessingResult[],
-		overallBatchError?: Error,
-	): Promise<Error | undefined> {
-		if (pointsForBatchUpsert.length > 0 && this.vectorStore && !overallBatchError) {
-			try {
-				for (let i = 0; i < pointsForBatchUpsert.length; i += BATCH_SEGMENT_THRESHOLD) {
-					const batch = pointsForBatchUpsert.slice(i, i + BATCH_SEGMENT_THRESHOLD)
-					let retryCount = 0
-					let upsertError: Error | undefined
-
-					while (retryCount < MAX_BATCH_RETRIES) {
-						try {
-							await this.vectorStore.upsertPoints(batch)
-							break
-						} catch (error) {
-							upsertError = error as Error
-							retryCount++
-							if (retryCount === MAX_BATCH_RETRIES) {
-								throw new Error(
-									`Failed to upsert batch after ${MAX_BATCH_RETRIES} retries: ${upsertError.message}`,
-								)
-							}
-							await new Promise((resolve) =>
-								setTimeout(resolve, INITIAL_RETRY_DELAY_MS * Math.pow(2, retryCount - 1)),
-							)
-						}
-					}
-				}
-
-				for (const { path, newHash } of successfullyProcessedForUpsert) {
-					if (newHash) {
-						this.cacheManager.updateHash(path, newHash)
-					}
-					batchResults.push({ path, status: "success" })
-				}
-			} catch (error) {
-				overallBatchError = overallBatchError || (error as Error)
-				for (const { path } of successfullyProcessedForUpsert) {
-					batchResults.push({ path, status: "error", error: error as Error })
-				}
-			}
-		} else if (overallBatchError && pointsForBatchUpsert.length > 0) {
-			for (const { path } of successfullyProcessedForUpsert) {
-				batchResults.push({ path, status: "error", error: overallBatchError })
-			}
-		}
-
-		return overallBatchError
-	}
-
 	private async processBatch(
-		eventsToProcess: Map<string, { filePath: string; type: "create" | "change" | "delete" }>,
+		events: Array<{ filePath: string; type: "create" | "change" | "delete" }>,
 	): Promise<void> {
 		const batchResults: FileProcessingResult[] = []
-		let processedCountInBatch = 0
-		const totalFilesInBatch = eventsToProcess.size
-		let overallBatchError: Error | undefined
-
+		const totalFilesInBatch = events.length
+		
 		// Initial progress update
 		this.eventBus.emit('batch-progress', {
 			processedInBatch: 0,
@@ -401,60 +209,134 @@ export class FileWatcher implements IFileWatcher {
 			currentFile: undefined,
 		})
 
-		// Categorize events
-		const pathsToExplicitlyDelete: string[] = []
-		const filesToUpsertDetails: Array<{ path: string; filePath: string; originalType: "create" | "change" }> = []
-
-		for (const event of eventsToProcess.values()) {
+		// Prepare events with content for non-delete operations
+		const eventsWithContent: Array<{ filePath: string; type: "create" | "change" | "delete"; content?: string; newHash?: string }> = []
+		
+		for (const event of events) {
 			if (event.type === "delete") {
-				pathsToExplicitlyDelete.push(event.filePath)
+				eventsWithContent.push(event)
 			} else {
-				filesToUpsertDetails.push({
-					path: event.filePath,
-					filePath: event.filePath,
-					originalType: event.type,
+				// For create/change events, we need to read the file content
+				try {
+					const fileContent = await this.fileSystem.readFile(event.filePath)
+					const content = new TextDecoder().decode(fileContent)
+					const newHash = createHash("sha256").update(content).digest("hex")
+					
+					eventsWithContent.push({
+						...event,
+						content,
+						newHash
+					})
+				} catch (error) {
+					console.error(`[FileWatcher] Failed to read file ${event.filePath}:`, error)
+					batchResults.push({
+						path: event.filePath,
+						status: "error",
+						error: error as Error
+					})
+				}
+			}
+		}
+
+		// Use BatchProcessor for the actual processing
+		if (this.embedder && this.vectorStore) {
+			const options: BatchProcessorOptions<typeof eventsWithContent[0]> = {
+				embedder: this.embedder,
+				vectorStore: this.vectorStore,
+				cacheManager: this.cacheManager,
+				
+				itemToText: (item) => item.content || "",
+				itemToFilePath: (item) => item.filePath,
+				getFileHash: (item) => item.newHash,
+				
+				itemToPoint: (item, embedding) => {
+					if (!item.content) {
+						throw new Error(`No content available for ${item.filePath}`)
+					}
+					
+					// Parse the file to get code blocks
+					const blocks = codeParser.parseFile(item.filePath, { 
+						content: item.content, 
+						fileHash: item.newHash || "" 
+					})
+					
+					// For simplicity, create a single point per file
+					// In a real implementation, you might want to create multiple points for multiple blocks
+					const normalizedAbsolutePath = generateNormalizedAbsolutePath(item.filePath)
+					const stableName = `${normalizedAbsolutePath}:0`
+					const pointId = uuidv5(stableName, QDRANT_CODE_BLOCK_NAMESPACE)
+					
+					return {
+						id: pointId,
+						vector: embedding,
+						payload: {
+							filePath: generateRelativeFilePath(normalizedAbsolutePath),
+							codeChunk: item.content,
+							startLine: 1,
+							endLine: item.content.split('\n').length,
+						},
+					}
+				},
+				
+				getFilesToDelete: (items) => {
+					const filesToDelete: string[] = []
+					for (const item of items) {
+						if (item.type === "delete") {
+							filesToDelete.push(item.filePath)
+						} else if (item.type === "change") {
+							// For change events, we need to delete old points first
+							filesToDelete.push(item.filePath)
+						}
+					}
+					return filesToDelete
+				},
+				
+				onProgress: (processed, total, currentFile) => {
+					this.eventBus.emit('batch-progress', {
+						processedInBatch: processed,
+						totalInBatch: total,
+						currentFile,
+					})
+				},
+				
+				onError: (error) => {
+					console.error("[FileWatcher] Batch processing error:", error)
+				}
+			}
+			
+			const result = await this.batchProcessor.processBatch(
+				eventsWithContent.filter(e => e.type !== "delete" && e.content),
+				options
+			)
+			
+			// Convert BatchProcessor results to FileProcessingResult format
+			for (const event of eventsWithContent) {
+				if (event.type === "delete" || !event.content) {
+					// Handle delete events and files that couldn't be read
+					batchResults.push({
+						path: event.filePath,
+						status: "success"
+					})
+				}
+			}
+			
+			// Add any errors from batch processing
+			for (const error of result.errors) {
+				batchResults.push({
+					path: "unknown",
+					status: "error",
+					error
 				})
 			}
 		}
 
-		// Phase 1: Handle deletions
-		const { overallBatchError: deletionError, processedCount: deletionCount } = await this._handleBatchDeletions(
-			batchResults,
-			processedCountInBatch,
-			totalFilesInBatch,
-			pathsToExplicitlyDelete,
-			filesToUpsertDetails,
-		)
-		overallBatchError = deletionError
-		processedCountInBatch = deletionCount
-
-		// Phase 2: Process files and prepare upserts
-		const {
-			pointsForBatchUpsert,
-			successfullyProcessedForUpsert,
-			processedCount: upsertCount,
-		} = await this._processFilesAndPrepareUpserts(
-			filesToUpsertDetails,
-			batchResults,
-			processedCountInBatch,
-			totalFilesInBatch,
-			pathsToExplicitlyDelete,
-		)
-		processedCountInBatch = upsertCount
-
-		// Phase 3: Execute batch upsert
-		overallBatchError = await this._executeBatchUpsertOperations(
-			pointsForBatchUpsert,
-			successfullyProcessedForUpsert,
-			batchResults,
-			overallBatchError,
-		)
-
 		// Finalize
 		this.eventBus.emit('batch-finish', {
 			processedFiles: batchResults,
-			batchError: overallBatchError,
+			batchError: batchResults.some(r => r.status === "error") ? 
+				new Error("Some files failed to process") : undefined,
 		})
+		
 		this.eventBus.emit('batch-progress', {
 			processedInBatch: totalFilesInBatch,
 			totalInBatch: totalFilesInBatch,
