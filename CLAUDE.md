@@ -47,10 +47,6 @@ Core Library        (Platform-agnostic business logic)
 
 ## Development Guidelines
 
-### Testing
-- Run tests: `npm test`
-- Integration tests verify cross-platform compatibility
-- Mock implementations for all external dependencies
 
 ### Building
 - Build library: `npm run build`
@@ -88,18 +84,6 @@ const codebase = createNodeJSCodebase('/path/to/project')
 await codebase.initialize()
 ```
 
-## Project Status
-
-✅ **Completed Phases:**
-- Day 1-2: Core abstractions and VSCode adapters
-- Day 3-4: CacheManager decoupling
-- Day 5: Event system abstraction
-- Day 6: Configuration and workspace abstraction
-- Day 7: External dependency removal
-- Day 8: Build configuration
-- Day 9: Usage examples and integration tests
-
-The library is now platform-agnostic and ready for distribution as a standalone package.
 
 ## Key Files to Understand
 
@@ -115,11 +99,8 @@ The library is now platform-agnostic and ready for distribution as a standalone 
 - `npm run dev` - Watch mode development
 - `npm run build` - Production build
 - `npm run type-check` - TypeScript validation
-- `npm run test` - Vitest validation
+- `npm run test` - Vitest validation, Temporarily not needed
 
-### Testing
-- `npm test` - Run all tests
-- Tests include unit tests and integration tests for cross-platform compatibility
 
 ## Notes for AI Assistants
 

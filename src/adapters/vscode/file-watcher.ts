@@ -8,7 +8,7 @@ export class VSCodeFileWatcher implements IFileWatcher {
   private readonly watchers = new Set<vscode.FileSystemWatcher>()
 
   watchFile(uri: string, callback: (event: FileWatchEvent) => void): () => void {
-    const pattern = new vscode.RelativePattern(vscode.Uri.parse(uri), '*')
+    const pattern = new vscode.RelativePattern(vscode.Uri.parse(uri).fsPath, '*')
     const watcher = vscode.workspace.createFileSystemWatcher(pattern)
 
     const disposables = [
@@ -42,7 +42,7 @@ export class VSCodeFileWatcher implements IFileWatcher {
   }
 
   watchDirectory(uri: string, callback: (event: FileWatchEvent) => void): () => void {
-    const pattern = new vscode.RelativePattern(vscode.Uri.parse(uri), '**/*')
+    const pattern = new vscode.RelativePattern(vscode.Uri.parse(uri).fsPath, '**/*')
     const watcher = vscode.workspace.createFileSystemWatcher(pattern)
 
     const disposables = [

@@ -62,7 +62,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register disposables
   context.subscriptions.push(
-    configDisposable,
+    { dispose: () => configDisposable() },
     // Add your codebase manager disposal here
     // { dispose: () => codebaseManager.dispose() }
   )

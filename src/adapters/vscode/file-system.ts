@@ -5,7 +5,7 @@ import { IFileSystem } from '../../abstractions/core'
  * VSCode file system adapter implementing IFileSystem interface
  */
 export class VSCodeFileSystem implements IFileSystem {
-  constructor(private readonly fs: typeof vscode.workspace.fs = vscode.workspace.fs) {}
+  constructor(private readonly fs = vscode.workspace.fs) {}
 
   async readFile(uri: string): Promise<Uint8Array> {
     try {

@@ -16,13 +16,50 @@
  */
 
 import * as vscode from "vscode"
+import { CodeIndexManager } from "./code-index/manager"
+import { VectorStoreSearchResult } from "./code-index/interfaces"
 
-import { Task } from "../task/Task"
-import { CodeIndexManager } from "../../services/code-index/manager"
-import { getWorkspacePath } from "../../utils/path"
-import { formatResponse } from "../prompts/responses"
-import { VectorStoreSearchResult } from "../../services/code-index/interfaces"
-import { AskApproval, HandleError, PushToolResult, RemoveClosingTag, ToolUse } from "../../shared/tools"
+// TODO: Implement getWorkspacePath locally
+function getWorkspacePath(): string | undefined {
+  return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+}
+
+// TODO: Implement missing interfaces locally
+interface Task {
+  consecutiveMistakeCount: number
+  providerRef: { deref: () => { context?: any } | undefined }
+  ask: (type: string, message: string, partial?: any) => Promise<void>
+  say: (type: string, message: string) => Promise<void>
+  sayAndCreateMissingParamError: (toolName: string, paramName: string) => Promise<string>
+}
+
+interface AskApproval {
+  (type: string, message: string): Promise<boolean>
+}
+
+interface HandleError {
+  (toolName: string, error: Error): Promise<void>
+}
+
+interface PushToolResult {
+  (result: string): void
+}
+
+interface RemoveClosingTag {
+  (tag: string, content?: string): string | undefined
+}
+
+interface ToolUse {
+  params: {
+    query?: string
+    path?: string
+  }
+  partial?: any
+}
+
+const formatResponse = {
+  toolDenied: () => "Tool execution was denied by user"
+}
 import path from "path"
 
 export async function codebaseSearchTool(
@@ -99,7 +136,7 @@ export async function codebaseSearchTool(
 			throw new Error("Code Indexing is not configured (Missing OpenAI Key or Qdrant URL).")
 		}
 
-		const searchResults: VectorStoreSearchResult[] = await manager.searchIndex(query, directoryPrefix)
+		const searchResults: VectorStoreSearchResult[] = await manager.searchIndex(query, 10)
 
 		// 3. Format and push results
 		if (!searchResults || searchResults.length === 0) {

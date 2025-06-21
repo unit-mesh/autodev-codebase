@@ -1,30 +1,47 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text } from 'ink';
+import type { CodeIndexManager } from '../../code-index/manager';
+import type { IndexingState } from '../../code-index/interfaces/manager';
 
 interface ProgressMonitorProps {
-  progress: any;
-  codeIndexManager: any;
+  progress: {
+    processedItems: number;
+    totalItems: number;
+    currentItemUnit?: string;
+    message: string;
+  };
+  codeIndexManager: CodeIndexManager;
   onLog: (message: string) => void;
 }
 
-export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({ 
-  progress, 
-  codeIndexManager, 
-  onLog 
+interface SystemStatus {
+  systemStatus: IndexingState;
+  fileStatuses: Record<string, unknown>;
+  message: string;
+  totalItems?: number;
+  lastUpdate?: Date;
+}
+
+export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
+  progress,
+  codeIndexManager,
+  onLog
 }) => {
-  const [status, setStatus] = useState<any>(null);
+  const [status, setStatus] = useState<SystemStatus | null>(null);
 
   useEffect(() => {
-    if (codeIndexManager) {
-      const updateStatus = () => {
-        const currentStatus = codeIndexManager.getCurrentStatus();
-        setStatus(currentStatus);
-      };
-
-      updateStatus();
-      const interval = setInterval(updateStatus, 1000);
-      return () => clearInterval(interval);
+    if (!codeIndexManager) {
+      return undefined;
     }
+    
+    const updateStatus = () => {
+      const currentStatus = codeIndexManager.getCurrentStatus();
+      setStatus(currentStatus);
+    };
+
+    updateStatus();
+    const interval = setInterval(updateStatus, 1000);
+    return () => clearInterval(interval);
   }, [codeIndexManager]);
 
   const getProgressBar = (processed: number, total: number) => {
@@ -62,10 +79,12 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
         {status && (
           <>
             <Box marginTop={1}>
-              <Text>
-                <Text color="gray">Total Items: </Text>
-                <Text color="white">{status.totalItems}</Text>
-              </Text>
+              {status.totalItems !== undefined && (
+                <Text>
+                  <Text color="gray">Total Items: </Text>
+                  <Text color="white">{status.totalItems}</Text>
+                </Text>
+              )}
             </Box>
             
             <Box marginTop={1}>

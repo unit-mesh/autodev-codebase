@@ -6,7 +6,7 @@ interface LogPanelProps {
 }
 
 export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
-  const getLogColor = (log: string) => {
+  const getLogColor = (log: string): string => {
     if (log.includes('❌') || log.includes('Error')) return 'red';
     if (log.includes('⚠️') || log.includes('Warning')) return 'yellow';
     if (log.includes('✅') || log.includes('Success')) return 'green';
@@ -32,9 +32,11 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
       </Box>
       
       {logs.length > 15 && (
-        <Text color="gray" marginTop={1}>
-          ... showing last 15 of {logs.length} logs
-        </Text>
+        <Box marginTop={1}>
+          <Text color="gray">
+            ... showing last 15 of {logs.length} logs
+          </Text>
+        </Box>
       )}
     </Box>
   );

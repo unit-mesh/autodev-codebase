@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
+import type { CodeIndexManager } from '../../code-index/manager';
+import type { VectorStoreSearchResult } from '../../code-index/interfaces';
 
 interface SearchInterfaceProps {
-  codeIndexManager: any;
+  codeIndexManager: CodeIndexManager;
   onLog: (message: string) => void;
 }
 
-export const SearchInterface: React.FC<SearchInterfaceProps> = ({ 
-  codeIndexManager, 
-  onLog 
+export const SearchInterface: React.FC<SearchInterfaceProps> = ({
+  codeIndexManager,
+  onLog
 }) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<VectorStoreSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -78,14 +80,16 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
           <Text bold>Results ({results.length}):</Text>
           
           {results.slice(0, 8).map((result, index) => (
-            <Box 
-              key={index} 
-              marginTop={1} 
+            <Box
+              key={index}
+              marginTop={1}
               paddingX={1}
-              backgroundColor={index === selectedIndex ? 'blue' : undefined}
             >
               <Box flexDirection="column">
-                <Text color={index === selectedIndex ? 'white' : 'cyan'}>
+                <Text
+                  color={index === selectedIndex ? 'white' : 'cyan'}
+                  backgroundColor={index === selectedIndex ? 'blue' : undefined}
+                >
                   {index + 1}. {truncateText(result.payload?.filePath || 'Unknown file', 40)}
                 </Text>
                 <Text color={index === selectedIndex ? 'white' : 'gray'}>
@@ -99,9 +103,11 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
           ))}
           
           {results.length > 8 && (
-            <Text color="gray" marginTop={1}>
-              ... and {results.length - 8} more results
-            </Text>
+            <Box marginTop={1}>
+              <Text color="gray">
+                ... and {results.length - 8} more results
+              </Text>
+            </Box>
           )}
         </Box>
       )}

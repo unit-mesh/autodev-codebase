@@ -10,6 +10,9 @@
  * actual filesystem access or ripgrep binary.
  */
 
+// Vitest mock 替换
+import { vi } from 'vitest'
+
 /**
  * Mock function for path resolving without importing path module
  * Provides basic path resolution for testing
@@ -30,7 +33,7 @@ const mockResolve = (dirPath: string): string => {
  * @param limit - Maximum number of files to return
  * @returns Promise resolving to [file paths, limit reached flag]
  */
-export const listFiles = jest.fn((dirPath: string, _recursive: boolean, _limit: number) => {
+export const listFiles = vi.fn((dirPath: string, _recursive: boolean, _limit: number) => {
 	// Special case: Root or home directories
 	// Prevents tests from trying to list all files in these directories
 	if (dirPath === "/" || dirPath === "/root" || dirPath === "/home/user") {
