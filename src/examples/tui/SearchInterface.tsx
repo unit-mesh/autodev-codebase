@@ -10,30 +10,34 @@ interface SearchFilter {
   pathPattern: string;
 }
 
-interface SavedSearch {
-  id: string;
-  query: string;
-  timestamp: Date;
-  resultCount: number;
-}
-
 interface SearchInterfaceProps {
   codeIndexManager: CodeIndexManager;
+  dependencies?: any;
   onLog: (message: string) => void;
 }
 
 export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   codeIndexManager,
+  dependencies,
   onLog
 }) => {
-  console.log('SearchInterface received codeIndexManager:', {
-    exists: !!codeIndexManager,
-    type: typeof codeIndexManager,
-    isInitialized: codeIndexManager?.isInitialized,
-    isFeatureEnabled: codeIndexManager?.isFeatureEnabled,
-    state: codeIndexManager?.state
-  });
-  
+  useEffect(() => {
+    console.log('SearchInterface received codeIndexManager:', {
+      exists: !!codeIndexManager,
+      type: typeof codeIndexManager,
+      isInitialized: codeIndexManager?.isInitialized,
+      isFeatureEnabled: codeIndexManager?.isFeatureEnabled,
+      state: codeIndexManager?.state
+    });
+    console.log('SearchInterface received dependencies:', {
+      exists: !!dependencies,
+      type: typeof dependencies,
+      hasWorkspace: !!dependencies?.workspace,
+      workspaceType: typeof dependencies?.workspace,
+      workspaceRootPath: dependencies?.workspace?.getRootPath?.()
+    });
+  }, [codeIndexManager, dependencies]);
+
   if (!codeIndexManager) {
     return (
       <Box flexDirection="column">
@@ -42,7 +46,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       </Box>
     );
   }
-  
+
   if (!codeIndexManager.isInitialized) {
     return (
       <Box flexDirection="column">
@@ -53,19 +57,19 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       </Box>
     );
   }
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<VectorStoreSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-
-  // New state for enhanced features
-  const [searchHistory, setSearchHistory] = useState<string[]>([]);
-  const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [filterMode, setFilterMode] = useState<'similarity' | 'fileTypes' | 'pathPattern'>('similarity');
+  const [tempFilterValue, setTempFilterValue] = useState('');
   const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set());
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [itemsPerPage] = useState(3);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [columnsCount, setColumnsCount] = useState(2);
   const [filters, setFilters] = useState<SearchFilter>({
     fileTypes: [],
     minSimilarity: 0.1,
@@ -79,41 +83,89 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   });
 
   useInput(async (input, key) => {
-    // console.log('input:', typeof input,input, 'key:', key);
-    // Handle special modes first
-    if (showHistory) {
-      if (key.escape) {
-        setShowHistory(false);
-      } else if (key.return && searchHistory.length > 0) {
-        const selectedHistory = searchHistory[selectedIndex] || searchHistory[0];
-        setQuery(selectedHistory);
-        setShowHistory(false);
-      } else if (key.upArrow && searchHistory.length > 0) {
-        setSelectedIndex(prev => Math.max(0, prev - 1));
-      } else if (key.downArrow && searchHistory.length > 0) {
-        setSelectedIndex(prev => Math.min(searchHistory.length - 1, prev + 1));
-      }
-      return;
-    }
-
+    // Handle special modes first - with priority to prevent conflicts
     if (showFilters) {
+      // In filter mode, we handle ALL input to prevent conflicts with parent App
       if (key.escape) {
         setShowFilters(false);
+        setTempFilterValue('');
+        return;
+      }
+
+      // Handle filter mode navigation with up/down arrows
+      if (key.upArrow) {
+        const modes: Array<'similarity' | 'fileTypes' | 'pathPattern'> = ['similarity', 'fileTypes', 'pathPattern'];
+        const currentIndex = modes.indexOf(filterMode);
+        const nextIndex = currentIndex === 0 ? modes.length - 1 : currentIndex - 1;
+        setFilterMode(modes[nextIndex]);
+        setTempFilterValue('');
+        return;
+      }
+
+      if (key.downArrow) {
+        const modes: Array<'similarity' | 'fileTypes' | 'pathPattern'> = ['similarity', 'fileTypes', 'pathPattern'];
+        const currentIndex = modes.indexOf(filterMode);
+        const nextIndex = (currentIndex + 1) % modes.length;
+        setFilterMode(modes[nextIndex]);
+        setTempFilterValue('');
+        return;
+      }
+
+      // Handle filter input
+      if (key.backspace || key.delete) {
+        setTempFilterValue(prev => prev.slice(0, -1));
+        return;
+      }
+
+      if (key.return) {
+        // Apply the filter value
+        if (filterMode === 'similarity') {
+          const value = parseFloat(tempFilterValue);
+          if (!isNaN(value) && value >= 0 && value <= 1) {
+            setFilters(prev => ({ ...prev, minSimilarity: value }));
+          }
+        } else if (filterMode === 'fileTypes') {
+          if (tempFilterValue.trim()) {
+            const types = tempFilterValue.split(',').map(t => t.trim()).filter(t => t);
+            setFilters(prev => ({ ...prev, fileTypes: types }));
+          }
+        } else if (filterMode === 'pathPattern') {
+          setFilters(prev => ({ ...prev, pathPattern: tempFilterValue.trim() }));
+        }
+        setTempFilterValue('');
+        // Re-apply filters to existing results if we have any
+        if (results.length > 0 && query.trim()) {
+          await performSearch();
+        }
+        return;
+      }
+
+      if (input === 'c' && key.ctrl) {
+        // Clear current filter
+        if (filterMode === 'similarity') {
+          setFilters(prev => ({ ...prev, minSimilarity: 0.1 }));
+        } else if (filterMode === 'fileTypes') {
+          setFilters(prev => ({ ...prev, fileTypes: [] }));
+        } else if (filterMode === 'pathPattern') {
+          setFilters(prev => ({ ...prev, pathPattern: '' }));
+        }
+        setTempFilterValue('');
+        // Re-apply filters to existing results if we have any
+        if (results.length > 0 && query.trim()) {
+          await performSearch();
+        }
+        return;
+      }
+
+      if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        setTempFilterValue(prev => prev + input);
       }
       return;
     }
 
     // Handle backspace first to fix deletion issue
     if (key.backspace || key.delete) {
-      setQuery(prev => {
-        const newQuery = prev.slice(0, -1);
-        if (newQuery.length > 0) {
-          generateSuggestions(newQuery);
-        } else {
-          setShowSuggestions(false);
-        }
-        return newQuery;
-      });
+      setQuery(prev => prev.slice(0, -1));
       setSelectedIndex(0);
       return;
     }
@@ -121,10 +173,108 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     // Main search interface controls
     if (key.return && query.trim()) {
       await performSearch();
-    } else if (key.upArrow && results.length > 0 && !showSuggestions) {
-      setSelectedIndex(prev => Math.max(0, prev - 1));
-    } else if (key.downArrow && results.length > 0 && !showSuggestions) {
-      setSelectedIndex(prev => Math.min(results.length - 1, prev + 1));
+    } else if (key.upArrow && results.length > 0) {
+      setSelectedIndex(prev => {
+        if (viewMode === 'grid') {
+          // Grid navigation: move up by columnsCount
+          const newIndex = Math.max(0, prev - columnsCount);
+          const newPage = Math.floor(newIndex / itemsPerPage);
+          if (newPage !== currentPage) {
+            setCurrentPage(newPage);
+          }
+          return newIndex;
+        } else {
+          // List navigation: move up by 1
+          const newIndex = Math.max(0, prev - 1);
+          const newPage = Math.floor(newIndex / itemsPerPage);
+          if (newPage !== currentPage) {
+            setCurrentPage(newPage);
+          }
+          return newIndex;
+        }
+      });
+    } else if (key.downArrow && results.length > 0) {
+      setSelectedIndex(prev => {
+        if (viewMode === 'grid') {
+          // Grid navigation: move down by columnsCount
+          const newIndex = Math.min(results.length - 1, prev + columnsCount);
+          const newPage = Math.floor(newIndex / itemsPerPage);
+          if (newPage !== currentPage) {
+            setCurrentPage(newPage);
+          }
+          return newIndex;
+        } else {
+          // List navigation: move down by 1
+          const newIndex = Math.min(results.length - 1, prev + 1);
+          const newPage = Math.floor(newIndex / itemsPerPage);
+          if (newPage !== currentPage) {
+            setCurrentPage(newPage);
+          }
+          return newIndex;
+        }
+      });
+    } else if (key.leftArrow && results.length > 0) {
+      if (viewMode === 'grid') {
+        // Grid navigation: move left by 1 (with wrapping)
+        setSelectedIndex(prev => {
+          const currentPageStart = currentPage * itemsPerPage;
+          const currentPageEnd = Math.min(results.length - 1, (currentPage + 1) * itemsPerPage - 1);
+
+          if (prev > currentPageStart) {
+            // Move left within current page
+            return prev - 1;
+          } else if (currentPage > 0) {
+            // Move to previous page, last item
+            setCurrentPage(currentPage - 1);
+            return Math.min(results.length - 1, (currentPage - 1 + 1) * itemsPerPage - 1);
+          }
+          return prev;
+        });
+      } else {
+        // List navigation: previous page
+        if (currentPage > 0) {
+          setCurrentPage(prev => prev - 1);
+          setSelectedIndex(prev => Math.min(prev, (currentPage - 1) * itemsPerPage));
+        }
+      }
+    } else if (key.rightArrow && results.length > 0) {
+      if (viewMode === 'grid') {
+        // Grid navigation: move right by 1 (with wrapping)
+        setSelectedIndex(prev => {
+          const currentPageEnd = Math.min(results.length - 1, (currentPage + 1) * itemsPerPage - 1);
+          const totalPages = Math.ceil(results.length / itemsPerPage);
+
+          if (prev < currentPageEnd) {
+            // Move right within current page
+            return prev + 1;
+          } else if (currentPage < totalPages - 1) {
+            // Move to next page, first item
+            setCurrentPage(currentPage + 1);
+            return (currentPage + 1) * itemsPerPage;
+          }
+          return prev;
+        });
+      } else {
+        // List navigation: next page
+        const totalPages = Math.ceil(results.length / itemsPerPage);
+        if (currentPage < totalPages - 1) {
+          setCurrentPage(prev => prev + 1);
+          setSelectedIndex((currentPage + 1) * itemsPerPage);
+        }
+      }
+    } else if (key.pageUp && results.length > 0) {
+      // Previous page
+      if (currentPage > 0) {
+        setCurrentPage(prev => prev - 1);
+        setSelectedIndex(currentPage * itemsPerPage - itemsPerPage);
+      }
+    } else if (key.pageDown && results.length > 0) {
+      // Next page
+      const totalPages = Math.ceil(results.length / itemsPerPage);
+      if (currentPage < totalPages - 1) {
+        setCurrentPage(prev => prev + 1);
+        setSelectedIndex((currentPage + 1) * itemsPerPage);
+      }
     } else if (input === ' ' && results.length > 0) {
       // Space to expand/collapse result details
       const newExpanded = new Set(expandedResults);
@@ -134,31 +284,28 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         newExpanded.add(selectedIndex);
       }
       setExpandedResults(newExpanded);
-    } else if (input === 's' && key.ctrl) {
-      // Ctrl+S to save current search
-      await saveCurrentSearch();
-    } else if (input === 'h' && key.ctrl) {
-      // Ctrl+H to show search history
-      setShowHistory(true);
-      setSelectedIndex(0);
     } else if (input === 'f' && key.ctrl) {
       // Ctrl+F to show filters
       setShowFilters(true);
+      setFilterMode('similarity');
+      setTempFilterValue('');
     } else if (input === 'o' && key.ctrl && results.length > 0) {
       // Ctrl+O to open in external editor
       await openInExternalEditor();
+    } else if (input === 'v' && key.ctrl) {
+      // Ctrl+V to toggle view mode
+      setViewMode(prev => prev === 'list' ? 'grid' : 'list');
+    } else if (input === '+' && viewMode === 'grid') {
+      // + to increase columns in grid view
+      setColumnsCount(prev => Math.min(4, prev + 1));
+    } else if (input === '-' && viewMode === 'grid') {
+      // - to decrease columns in grid view
+      setColumnsCount(prev => Math.max(1, prev - 1));
     } else if (input && input.length === 1 && !key.ctrl && !key.meta && !key.escape) {
       // Only handle single character input to avoid issues with special keys
       const newQuery = query + input;
       setQuery(newQuery);
       setSelectedIndex(0);
-
-      // Generate suggestions as user types
-      if (newQuery.length > 2) {
-        generateSuggestions(newQuery);
-      } else {
-        setShowSuggestions(false);
-      }
     }
   });
 
@@ -166,7 +313,9 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     if (!codeIndexManager || !query.trim()) return;
 
     const startTime = Date.now();
-    setShowSuggestions(false);
+    setIsSearching(true);
+    onLog(`🔍 Searching for: "${query}"`);
+
     try {
       const searchResults = await codeIndexManager.searchIndex(query.trim(), 20);
 
@@ -190,12 +339,8 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
 
       setResults(filteredResults);
       setSelectedIndex(0);
+      setCurrentPage(0);
       setExpandedResults(new Set());
-
-      // Update search history
-      if (!searchHistory.includes(query.trim())) {
-        setSearchHistory(prev => [query.trim(), ...prev.slice(0, 19)]);
-      }
 
       // Update search stats
       const responseTime = Date.now() - startTime;
@@ -212,56 +357,41 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     }
   };
 
-  const generateSuggestions = (currentQuery: string) => {
-    if (!searchHistory.length) return;
-
-    const suggestions = searchHistory
-      .filter(hist => hist.toLowerCase().includes(currentQuery.toLowerCase()))
-      .slice(0, 5);
-
-    setSuggestions(suggestions);
-    setShowSuggestions(suggestions.length > 0);
-  };
-
-  const saveCurrentSearch = async () => {
-    if (!query.trim() || results.length === 0) return;
-
-    const savedSearch: SavedSearch = {
-      id: Date.now().toString(),
-      query: query.trim(),
-      timestamp: new Date(),
-      resultCount: results.length
-    };
-
-    setSavedSearches(prev => [savedSearch, ...prev.slice(0, 9)]);
-    onLog(`💾 Saved search: "${query}" (${results.length} results)`);
-  };
-
   const openInExternalEditor = async () => {
     if (results.length === 0 || selectedIndex >= results.length) return;
 
     const selectedResult = results[selectedIndex];
-    const filePath = selectedResult.payload?.filePath;
+    console.log(selectedResult)
+    const relativePath = selectedResult.payload?.filePath;
     const lineNumber = selectedResult.payload?.startLine;
 
-    if (!filePath) {
+    if (!relativePath) {
       onLog(`❌ No file path available for selected result`);
       return;
     }
 
+    // Get workspace root path and construct full file path
+    const workspaceRoot = dependencies?.workspace?.getRootPath();
+    if (!workspaceRoot) {
+      onLog(`❌ Workspace root path not available`);
+      return;
+    }
+
+    const fullFilePath = `${workspaceRoot}/${relativePath}`;
+
     try {
       // Try to open with VS Code first, then fallback to system default
       const commands = [
-        `code -g "${filePath}:${lineNumber || 1}"`,
-        `open "${filePath}"`,
-        `xdg-open "${filePath}"`
+        `code -g "${fullFilePath}:${lineNumber || 1}"`,
+        `open "${fullFilePath}"`,
+        `xdg-open "${fullFilePath}"`
       ];
-
+      console.log(commands)
       for (const cmd of commands) {
         try {
           exec(cmd, (error) => {
             if (!error) {
-              onLog(`📝 Opened ${filePath}:${lineNumber || 1} in external editor`);
+              onLog(`📝 Opened ${fullFilePath}:${lineNumber || 1} in external editor`);
             }
           });
           break;
@@ -279,53 +409,71 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     return text.substring(0, maxLength) + '...';
   };
 
-  // Search History Modal
-  if (showHistory) {
-    return (
-      <Box flexDirection="column">
-        <Text bold color="green">📜 Search History</Text>
-        <Box>
-          <Text color="gray">Press Enter to select • Escape to cancel</Text>
-        </Box>
-
-        {searchHistory.length === 0 ? (
-          <Box >
-            <Text color="yellow">No search history yet</Text>
-          </Box>
-        ) : (
-          <Box  flexDirection="column">
-            {searchHistory.slice(0, 10).map((hist, index) => (
-              <Text
-                key={index}
-                color={index === selectedIndex ? 'white' : 'gray'}
-                backgroundColor={index === selectedIndex ? 'blue' : undefined}
-              >
-                {index + 1}. {hist}
-              </Text>
-            ))}
-          </Box>
-        )}
-      </Box>
-    );
-  }
-
   // Filters Panel
   if (showFilters) {
+    const getCurrentValue = () => {
+      if (filterMode === 'similarity') {
+        return tempFilterValue || filters.minSimilarity.toString();
+      } else if (filterMode === 'fileTypes') {
+        return tempFilterValue || filters.fileTypes.join(', ');
+      } else if (filterMode === 'pathPattern') {
+        return tempFilterValue || filters.pathPattern;
+      }
+      return '';
+    };
+
+    const getPlaceholder = () => {
+      if (filterMode === 'similarity') {
+        return '0.0-1.0 (e.g., 0.7)';
+      } else if (filterMode === 'fileTypes') {
+        return '.ts,.tsx,.js (comma separated)';
+      } else if (filterMode === 'pathPattern') {
+        return 'regex pattern (e.g., src/.*\\.ts)';
+      }
+      return '';
+    };
+
     return (
       <Box flexDirection="column">
         <Text bold color="green">🔧 Search Filters</Text>
-        <Box >
-          <Text color="gray">Press Escape to close</Text>
+        <Box>
+          <Text color="gray">↑↓: switch mode • Enter: apply • Ctrl+C: clear • Escape: close</Text>
         </Box>
 
-        <Box  flexDirection="column">
-          <Text>Min Similarity: {filters.minSimilarity.toFixed(2)}</Text>
-          <Text>File Types: {filters.fileTypes.join(', ') || 'All'}</Text>
-          <Text>Path Pattern: {filters.pathPattern || 'None'}</Text>
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="cyan">Current Filters:</Text>
+          <Text color={filters.minSimilarity > 0.1 ? 'yellow' : 'gray'}>
+            • Min Similarity: {filters.minSimilarity.toFixed(2)}
+          </Text>
+          <Text color={filters.fileTypes.length > 0 ? 'yellow' : 'gray'}>
+            • File Types: {filters.fileTypes.join(', ') || 'All'}
+          </Text>
+          <Text color={filters.pathPattern ? 'yellow' : 'gray'}>
+            • Path Pattern: {filters.pathPattern || 'None'}
+          </Text>
         </Box>
 
-        <Box >
-          <Text color="yellow">Filter editing coming soon...</Text>
+        <Box flexDirection="column" marginTop={1}>
+          <Text bold color="white">
+            Editing: {filterMode === 'similarity' ? 'Min Similarity' :
+                     filterMode === 'fileTypes' ? 'File Types' : 'Path Pattern'}
+          </Text>
+
+          <Box>
+            <Text color="blue">Input: </Text>
+            <Text
+              color="white"
+              backgroundColor="blue"
+            >
+              {getCurrentValue() || getPlaceholder()}
+            </Text>
+          </Box>
+
+          <Box marginTop={1}>
+            <Text color="gray" dimColor>
+              Examples: {getPlaceholder()}
+            </Text>
+          </Box>
         </Box>
       </Box>
     );
@@ -349,25 +497,16 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         {isSearching && <Text color="yellow"> [Searching...]</Text>}
       </Box>
 
-      {/* Search suggestions */}
-      {showSuggestions && suggestions.length > 0 && (
-        <Box  flexDirection="column">
-          <Text color="gray">Suggestions:</Text>
-          {suggestions.map((suggestion, index) => (
-            <Text key={index} color="cyan">• {suggestion}</Text>
-          ))}
-        </Box>
-      )}
-
-      <Box >
+      <Box>
         <Text color="gray">
-          Enter: search • ↑↓: navigate • Space: expand • Ctrl+H: history • Ctrl+F: filters • Ctrl+S: save • Ctrl+O: open
+          Enter: search • {viewMode === 'grid' ? '↑↓←→: navigate grid • ' : '↑↓: navigate • ←→: pages • '}PgUp/PgDn: pages • Space: expand • Ctrl+F: filters • Ctrl+O: open • Ctrl+V: view mode{viewMode === 'grid' ? ' • +/-: columns' : ''}
         </Text>
       </Box>
 
+
       {/* Active filters indicator */}
       {(filters.fileTypes.length > 0 || filters.minSimilarity > 0.1 || filters.pathPattern) && (
-        <Box >
+        <Box>
           <Text color="yellow">
             🔧 Filters: {filters.fileTypes.join(',')}
             {filters.minSimilarity > 0.1 && ` sim>${filters.minSimilarity}`}
@@ -376,69 +515,121 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         </Box>
       )}
 
-      {/* Saved searches */}
-      {savedSearches.length > 0 && (
-        <Box >
-          <Text color="gray">
-            💾 Saved: {savedSearches.slice(0, 3).map(s => s.query).join(', ')}
-            {savedSearches.length > 3 && '...'}
-          </Text>
-        </Box>
-      )}
-
       {results.length > 0 && (
         <Box marginTop={1} flexDirection="column">
-          <Text bold>Results ({results.length}):</Text>
-
-          {results.slice(0, 10).map((result, index) => (
-            <Box
-              key={index}
-
-              paddingX={1}
-              borderStyle={index === selectedIndex ? 'single' : undefined}
-              borderColor={index === selectedIndex ? 'blue' : undefined}
-            >
-              <Box flexDirection="column">
-                <Text
-                  color={index === selectedIndex ? 'white' : 'cyan'}
-                  backgroundColor={index === selectedIndex ? 'blue' : undefined}
-                >
-                  {index + 1}. {truncateText(result.payload?.filePath || 'Unknown file', 50)}
-                  {expandedResults.has(index) ? ' 📖' : ' 📄'}
-                </Text>
-                <Text color={index === selectedIndex ? 'white' : 'gray'}>
-                  Score: {result.score.toFixed(3)} | Lines: {result.payload?.startLine}-{result.payload?.endLine}
-                </Text>
-
-                {expandedResults.has(index) ? (
-                  <Box flexDirection="column"  paddingLeft={2}>
-                    <Text color="yellow">Full Content:</Text>
-                    <Text color={index === selectedIndex ? 'white' : 'gray'}>
-                      {result.payload?.codeChunk || 'No content available'}
-                    </Text>
-                  </Box>
-                ) : (
-                  <Text color={index === selectedIndex ? 'white' : 'gray'}>
-                    {truncateText(result.payload?.codeChunk || '', 80)}
-                  </Text>
-                )}
-              </Box>
-            </Box>
-          ))}
-
-          {results.length > 10 && (
-            <Box >
+          <Box flexDirection="row" justifyContent="space-between">
+            <Text bold>Results ({results.length}):</Text>
+            <Box>
               <Text color="gray">
-                ... and {results.length - 10} more results
+                {viewMode === 'grid' ? `${columnsCount} cols • ` : ''}
+                Page {currentPage + 1}/{Math.ceil(results.length / itemsPerPage)}
+              </Text>
+            </Box>
+          </Box>
+
+          {viewMode === 'list' ? (
+            // List view (original layout)
+            <>
+              {results.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage).map((result, index) => (
+                <Box
+                  key={currentPage * itemsPerPage + index}
+                  paddingX={1}
+                  borderStyle={currentPage * itemsPerPage + index === selectedIndex ? 'single' : undefined}
+                  borderColor={currentPage * itemsPerPage + index === selectedIndex ? 'blue' : undefined}
+                >
+                  <Box flexDirection="column">
+                    <Text
+                      color={currentPage * itemsPerPage + index === selectedIndex ? 'white' : 'cyan'}
+                      backgroundColor={currentPage * itemsPerPage + index === selectedIndex ? 'blue' : undefined}
+                    >
+                      {currentPage * itemsPerPage + index + 1}. {truncateText(result.payload?.filePath || 'Unknown file', 50)}
+                      {expandedResults.has(currentPage * itemsPerPage + index) ? ' 📖' : ' 📄'}
+                    </Text>
+                    <Text color={currentPage * itemsPerPage + index === selectedIndex ? 'white' : 'gray'}>
+                      Score: {result.score.toFixed(3)} | Lines: {result.payload?.startLine}-{result.payload?.endLine}
+                    </Text>
+
+                    {expandedResults.has(currentPage * itemsPerPage + index) ? (
+                      <Box flexDirection="column" paddingLeft={2}>
+                        <Text color="yellow">Full Content:</Text>
+                        <Text color={currentPage * itemsPerPage + index === selectedIndex ? 'white' : 'gray'}>
+                          {result.payload?.codeChunk || 'No content available'}
+                        </Text>
+                      </Box>
+                    ) : (
+                      <Text color={currentPage * itemsPerPage + index === selectedIndex ? 'white' : 'gray'}>
+                        {truncateText(result.payload?.codeChunk || '', 80)}
+                      </Text>
+                    )}
+                  </Box>
+                </Box>
+              ))}
+            </>
+          ) : (
+            // Grid view (new compact layout)
+            <Box flexDirection="column">
+              {Array.from({ length: Math.ceil(results.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage).length / columnsCount) }).map((_, rowIndex) => (
+                <Box key={rowIndex} flexDirection="row">
+                  {Array.from({ length: columnsCount }).map((_, colIndex) => {
+                    const itemIndex = rowIndex * columnsCount + colIndex;
+                    const globalIndex = currentPage * itemsPerPage + itemIndex;
+                    const result = results[globalIndex];
+
+                    if (!result) return <Box key={colIndex} flexGrow={1} />;
+
+                    return (
+                      <Box
+                        key={colIndex}
+                        flexGrow={1}
+                        paddingX={1}
+                        marginRight={colIndex < columnsCount - 1 ? 1 : 0}
+                        borderStyle={globalIndex === selectedIndex ? 'single' : undefined}
+                        borderColor={globalIndex === selectedIndex ? 'blue' : undefined}
+                      >
+                        <Box flexDirection="column">
+                          <Text
+                            color={globalIndex === selectedIndex ? 'white' : 'cyan'}
+                            backgroundColor={globalIndex === selectedIndex ? 'blue' : undefined}
+                          >
+                            {globalIndex + 1}. {truncateText(result.payload?.filePath?.split('/').pop() || 'Unknown', 15)}
+                          </Text>
+                          <Text color={globalIndex === selectedIndex ? 'white' : 'gray'} dimColor>
+                            {result.score.toFixed(2)} | L{result.payload?.startLine}
+                          </Text>
+                          <Text color={globalIndex === selectedIndex ? 'white' : 'gray'} dimColor>
+                            {truncateText(result.payload?.codeChunk || '', 25)}
+                          </Text>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              ))}
+            </Box>
+          )}
+
+          {results.length > itemsPerPage && (
+            <Box marginTop={1}>
+              <Text color="cyan">
+                📄 Use ←→ or PgUp/PgDn to navigate pages{viewMode === 'grid' ? ' • Ctrl+V: switch to list view' : ''}
               </Text>
             </Box>
           )}
         </Box>
       )}
 
-      {results.length === 0 && query && !isSearching && (
+      {query && !isSearching && results.length === 0 && (
         <Box marginTop={1}>
-          <Text color="yellow">No results found for "{query}"</Text>
+          {searchStatsRef.current.totalSearches === 0 ? (
+            <Text color="gray">Press Enter to search</Text>
+          ) : (
+            <Text color="yellow">No results found for "{query}"</Text>
+          )}
+        </Box>
+      )}
+      {!query && !isSearching && results.length === 0 && (
+        <Box marginTop={2} flexDirection="column" alignItems="center">
+          <Text color="gray">🔎 Please enter keywords and press Enter to search</Text>
         </Box>
       )}
     </Box>

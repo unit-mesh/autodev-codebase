@@ -157,11 +157,21 @@ export class CodeIndexOrchestrator {
 			const { stats } = result
 			console.log('[CodeIndexOrchestrator] 📊 扫描统计:', stats)
 
+			// 提供更详细的状态消息
+			let statusMessage = "File watcher started."
+			if (stats.processed === 0 && stats.skipped > 0) {
+				statusMessage = `All files cached (${stats.skipped} files skipped). Index up-to-date.`
+			} else if (stats.processed > 0 && stats.skipped > 0) {
+				statusMessage = `Indexed ${stats.processed} new/changed files, ${stats.skipped} cached files skipped.`
+			} else if (stats.processed > 0) {
+				statusMessage = `Indexed ${stats.processed} files.`
+			}
+
 			console.log('[CodeIndexOrchestrator] 👀 开始文件监控...')
 			await this._startWatcher()
 			console.log('[CodeIndexOrchestrator] ✅ 文件监控已启动')
 
-			this.stateManager.setSystemState("Indexed", "File watcher started.")
+			this.stateManager.setSystemState("Indexed", statusMessage)
 			console.log('[CodeIndexOrchestrator] ✨ 索引进程全部完成!')
 		} catch (error: any) {
 			console.error("[CodeIndexOrchestrator] ❌ 索引过程中发生错误:", error)

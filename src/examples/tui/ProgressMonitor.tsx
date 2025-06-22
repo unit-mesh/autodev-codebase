@@ -93,6 +93,9 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
                 <Text color="white">
                   {progress.processedItems}/{progress.totalItems} {progress.currentItemUnit || 'items'}
                 </Text>
+                {progress.totalItems === 0 && status?.systemStatus === 'Indexed' && (
+                  <Text color="yellow"> (All files cached)</Text>
+                )}
               </Text>
             </Box>
 
@@ -106,7 +109,7 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
         <Box >
           <Text>
             <Text color="gray">Message: </Text>
-            <Text color="cyan">{progress.message}</Text>
+            <Text color="cyan">{status?.message || progress.message}</Text>
           </Text>
         </Box>
 

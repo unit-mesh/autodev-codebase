@@ -121,12 +121,11 @@ export class CodeParser implements ICodeParser {
 		}
 
 		const tree = language.parser.parse(content)
-
 		// We don't need to get the query string from languageQueries since it's already loaded
 		// in the language object
 		const captures = language.query.captures(tree.rootNode)
 		// Check if captures are empty
-		if (captures.length === 0) {
+		if (!captures || captures.length === 0) {
 			if (content.length >= MIN_BLOCK_CHARS) {
 				// Perform fallback chunking if content is large enough
 				const blocks = this._performFallbackChunking(filePath, content, fileHash, seenSegmentHashes)
@@ -147,10 +146,10 @@ export class CodeParser implements ICodeParser {
 			// const lineSpan = currentNode.endPosition.row - currentNode.startPosition.row + 1 // Removed as per lint error
 
 			// Check if the node meets the minimum character requirement
-			if (currentNode.text.length >= MIN_BLOCK_CHARS) {
+			if (currentNode.text && currentNode.text.length >= MIN_BLOCK_CHARS) {
 				// If it also exceeds the maximum character limit, try to break it down
 				if (currentNode.text.length > MAX_BLOCK_CHARS * MAX_CHARS_TOLERANCE_FACTOR) {
-					if (currentNode.children.length > 0) {
+					if (currentNode.children && currentNode.children.length > 0) {
 						// If it has children, process them instead
 						queue.push(...currentNode.children)
 					} else {
@@ -168,7 +167,7 @@ export class CodeParser implements ICodeParser {
 					// Node meets min chars and is within max chars, create a block
 					const identifier =
 						currentNode.childForFieldName("name")?.text ||
-						currentNode.children.find((c) => c.type === "identifier")?.text ||
+						currentNode.children?.find((c) => c.type === "identifier")?.text ||
 						null
 					const type = currentNode.type
 					const start_line = currentNode.startPosition.row + 1
@@ -358,6 +357,10 @@ export class CodeParser implements ICodeParser {
 		fileHash: string,
 		seenSegmentHashes: Set<string>,
 	): CodeBlock[] {
+		if (!node.text) {
+			console.warn(`Node text is undefined for ${node.type} in ${filePath}`)
+			return []
+		}
 		const lines = node.text.split("\n")
 		const baseStartLine = node.startPosition.row + 1
 		return this._chunkTextByLines(

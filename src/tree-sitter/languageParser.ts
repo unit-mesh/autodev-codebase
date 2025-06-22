@@ -1,5 +1,8 @@
 import * as path from "path"
+import { fileURLToPath } from "url"
 import Parser from "web-tree-sitter"
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 import {
 	javascriptQuery,
 	typescriptQuery,
@@ -38,7 +41,12 @@ export interface LanguageParser {
 }
 
 async function loadLanguage(langName: string) {
-	return await Parser.Language.load(path.join(__dirname, `tree-sitter-${langName}.wasm`))
+	try {
+		return await Parser.Language.load(path.join(__dirname, `tree-sitter-${langName}.wasm`))
+	} catch (error) {
+		console.warn(`Failed to load language parser for ${langName}:`, error.message)
+		throw error
+	}
 }
 
 let isParserInitialized = false
@@ -77,16 +85,17 @@ export async function loadRequiredLanguageParsers(filesToParse: string[]): Promi
 	const extensionsToLoad = new Set(filesToParse.map((file) => path.extname(file).toLowerCase().slice(1)))
 	const parsers: LanguageParser = {}
 	for (const ext of Array.from(extensionsToLoad)) {
-		let language: Parser.Language
-		let query: Parser.Query
-		let parserKey = ext // Default to using extension as key
-		switch (ext) {
-			case "js":
-			case "jsx":
-			case "json":
-				language = await loadLanguage("javascript")
-				query = language.query(javascriptQuery)
-				break
+		try {
+			let language: Parser.Language
+			let query: Parser.Query
+			let parserKey = ext // Default to using extension as key
+			switch (ext) {
+				case "js":
+				case "jsx":
+				case "json":
+					language = await loadLanguage("javascript")
+					query = language.query(javascriptQuery)
+					break
 			case "ts":
 				language = await loadLanguage("typescript")
 				query = language.query(typescriptQuery)
@@ -203,11 +212,16 @@ export async function loadRequiredLanguageParsers(filesToParse: string[]): Promi
 				query = language.query(elixirQuery)
 				break
 			default:
-				throw new Error(`Unsupported language: ${ext}`)
+				console.warn(`Unsupported language: ${ext}`)
+				continue
 		}
 		const parser = new Parser()
 		parser.setLanguage(language)
 		parsers[parserKey] = { parser, query }
+		} catch (error) {
+			console.warn(`Failed to load parser for extension ${ext}:`, error.message)
+			continue
+		}
 	}
 	return parsers
 }

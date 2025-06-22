@@ -5,6 +5,8 @@ import { ProgressMonitor } from './ProgressMonitor';
 import { SearchInterface } from './SearchInterface';
 import { LogPanel } from './LogPanel';
 
+const VIEWS: AppState['currentView'][] = ['progress', 'search', 'config', 'logs'];
+
 export interface AppState {
   currentView: 'config' | 'progress' | 'search' | 'logs';
   config: any;
@@ -16,7 +18,7 @@ export interface AppState {
 
 export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ codeIndexManager, dependencies }) => {
   const [state, setState] = useState<AppState>({
-    currentView: 'config',
+    currentView: 'progress',
     config: null,
     progress: { processedItems: 0, totalItems: 0, message: 'Initializing...' },
     logs: ['🚀 Starting Autodev Codebase TUI'],
@@ -39,11 +41,15 @@ export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ 
     setState(prev => ({ ...prev, codeIndexManager }));
   }, [codeIndexManager]);
 
+  // 监听 dependencies 的变化并更新状态
+  useEffect(() => {
+    setState(prev => ({ ...prev, dependencies }));
+  }, [dependencies]);
+
   useInput((input, key) => {
     if (key.tab) {
-      const views: AppState['currentView'][] = ['config', 'progress', 'search', 'logs'];
-      const currentIndex = views.indexOf(state.currentView);
-      const nextView = views[(currentIndex + 1) % views.length];
+      const currentIndex = VIEWS.indexOf(state.currentView);
+      const nextView = VIEWS[(currentIndex + 1) % VIEWS.length];
       setState(prev => ({ ...prev, currentView: nextView }));
     }
     if (input === 'q' && key.ctrl) {
@@ -79,18 +85,15 @@ export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ 
         <Box width="25%" borderStyle="single" borderColor="gray" padding={1} paddingTop={0} flexDirection="column">
           <Text bold>Navigation</Text>
           <Box flexDirection="column">
-            <Text color={state.currentView === 'config' ? 'green' : 'white'}>
-              {state.currentView === 'config' ? '▶ ' : '  '}Config
-            </Text>
-            <Text color={state.currentView === 'progress' ? 'green' : 'white'}>
-              {state.currentView === 'progress' ? '▶ ' : '  '}Progress
-            </Text>
-            <Text color={state.currentView === 'search' ? 'green' : 'white'}>
-              {state.currentView === 'search' ? '▶ ' : '  '}Search
-            </Text>
-            <Text color={state.currentView === 'logs' ? 'green' : 'white'}>
-              {state.currentView === 'logs' ? '▶ ' : '  '}Logs
-            </Text>
+            {VIEWS.map(view => (
+              <Text
+                key={view}
+                color={state.currentView === view ? 'green' : 'white'}
+              >
+                {state.currentView === view ? '▶ ' : '  '}
+                {view.charAt(0).toUpperCase() + view.slice(1)}
+              </Text>
+            ))}
           </Box>
         </Box>
 
@@ -113,6 +116,7 @@ export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ 
             state.codeIndexManager ? (
               <SearchInterface
                 codeIndexManager={state.codeIndexManager}
+                dependencies={state.dependencies}
                 onLog={addLog}
               />
             ) : (
