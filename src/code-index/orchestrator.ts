@@ -106,15 +106,21 @@ export class CodeIndexOrchestrator {
 
 		this._isProcessing = true
 		this.stateManager.setSystemState("Indexing", "Initializing services...")
+		console.log('[CodeIndexOrchestrator] 🚀 开始索引进程...')
 
 		try {
+			console.log('[CodeIndexOrchestrator] 💾 初始化向量存储...')
 			const collectionCreated = await this.vectorStore.initialize()
+			console.log('[CodeIndexOrchestrator] ✅ 向量存储初始化完成, 新集合创建:', collectionCreated)
 
 			if (collectionCreated) {
+				console.log('[CodeIndexOrchestrator] 🗑️ 清理缓存文件...')
 				await this.cacheManager.clearCacheFile()
+				console.log('[CodeIndexOrchestrator] ✅ 缓存文件已清理')
 			}
 
 			this.stateManager.setSystemState("Indexing", "Services ready. Starting workspace scan...")
+			console.log('[CodeIndexOrchestrator] 📁 开始扫描工作区:', this.workspacePath)
 
 			let cumulativeBlocksIndexed = 0
 			let cumulativeBlocksFoundSoFar = 0
@@ -129,29 +135,37 @@ export class CodeIndexOrchestrator {
 				this.stateManager.reportBlockIndexingProgress(cumulativeBlocksIndexed, cumulativeBlocksFoundSoFar)
 			}
 
+			console.log('[CodeIndexOrchestrator] 🔍 开始扫描目录...')
 			const result = await this.scanner.scanDirectory(
 				this.workspacePath,
 				(batchError: Error) => {
 					console.error(
-						`[CodeIndexOrchestrator] Error during initial scan batch: ${batchError.message}`,
+						`[CodeIndexOrchestrator] ❌ 扫描批次错误: ${batchError.message}`,
 						batchError,
 					)
 				},
 				handleBlocksIndexed,
 				handleFileParsed,
 			)
+			console.log('[CodeIndexOrchestrator] ✅ 目录扫描完成')
 
 			if (!result) {
+				console.error('[CodeIndexOrchestrator] ❌ 扫描结果为空')
 				throw new Error("Scan failed, is scanner initialized?")
 			}
 
 			const { stats } = result
+			console.log('[CodeIndexOrchestrator] 📊 扫描统计:', stats)
 
+			console.log('[CodeIndexOrchestrator] 👀 开始文件监控...')
 			await this._startWatcher()
+			console.log('[CodeIndexOrchestrator] ✅ 文件监控已启动')
 
 			this.stateManager.setSystemState("Indexed", "File watcher started.")
+			console.log('[CodeIndexOrchestrator] ✨ 索引进程全部完成!')
 		} catch (error: any) {
-			console.error("[CodeIndexOrchestrator] Error during indexing:", error)
+			console.error("[CodeIndexOrchestrator] ❌ 索引过程中发生错误:", error)
+			console.error("[CodeIndexOrchestrator] ❌ 错误堆栈:", error.stack)
 			try {
 				await this.vectorStore.clearCollection()
 			} catch (cleanupError) {

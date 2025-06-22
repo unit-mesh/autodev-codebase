@@ -8,9 +8,9 @@
   "files": [
     "dist/**/*"
   ],
+  "dev": "rollup -c rollup.config.cjs --watch",
   "scripts": {
     "build": "rollup -c rollup.config.cjs",
-    "dev": "rollup -c rollup.config.cjs --watch",
     "type-check": "npx tsc -p tsconfig.lib.json --noEmit",
     "demo-tui": "npx tsx src/examples/run-demo-tui.tsx"
   },

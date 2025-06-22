@@ -112,3 +112,106 @@ await codebase.initialize()
 6. **Build Target**: Library supports both ESM and CommonJS for maximum compatibility
 
 This codebase demonstrates enterprise-level abstraction patterns and clean architecture principles for creating truly portable JavaScript libraries.
+
+## TUI Debug Experience - CodeIndexManager Initialization Flow
+
+### Critical Discovery: React State Synchronization Issues
+
+During debugging of the TUI demo (`src/examples/run-demo-tui.tsx` + `src/examples/tui/App.tsx`), we discovered a critical React state synchronization issue that affects any React-based integration of the CodeIndexManager.
+
+#### Problem Pattern
+```typescript
+// ❌ BROKEN: Initial state only
+const [state, setState] = useState({
+  codeIndexManager: initialManager  // Only sets once, never updates
+});
+
+// Later when parent updates codeIndexManager prop...
+// Child component never receives the update!
+```
+
+#### Solution Pattern  
+```typescript
+// ✅ FIXED: Add useEffect to sync prop changes
+useEffect(() => {
+  setState(prev => ({ ...prev, codeIndexManager }));
+}, [codeIndexManager]);
+```
+
+### CodeIndexManager Initialization Call Flow
+
+**Critical Path Discovery:**
+1. `createNodeDependencies()` → Creates platform adapters
+2. `deps.configProvider.loadConfig()` → Loads configuration  
+3. `deps.configProvider.validateConfig()` → **CRITICAL CHECKPOINT**
+4. `CodeIndexManager.getInstance(deps)` → **REQUIRES: workspace.getRootPath()**
+5. `manager.initialize()` → Initializes internal services
+6. `manager.startIndexing()` → Triggers orchestrator
+
+**Key Insight:** Step 4 silently fails if `workspace.getRootPath()` returns `undefined`, causing `getInstance()` to return `undefined` without error logging.
+
+### Indexing Process Debugging Points
+
+**Orchestrator Flow (`src/code-index/orchestrator.ts`):**
+1. `vectorStore.initialize()` - Vector database connection
+2. `cacheManager.clearCacheFile()` - Cache cleanup (if needed)  
+3. `scanner.scanDirectory()` - File discovery and parsing
+4. `_startWatcher()` - File change monitoring setup
+
+**Common Hang Points:**
+- Vector store connection timeout (Qdrant not running)
+- Scanner getting stuck on large directories
+- File watcher initialization failing
+
+### React Component Debug Patterns
+
+**For any React integration with CodeIndexManager:**
+
+```typescript
+// Always add debug logging in child components
+console.log('Component received codeIndexManager:', {
+  exists: !!codeIndexManager,
+  type: typeof codeIndexManager,
+  isInitialized: codeIndexManager?.isInitialized,
+  isFeatureEnabled: codeIndexManager?.isFeatureEnabled,
+  state: codeIndexManager?.state
+});
+
+// Always handle different initialization states
+if (!codeIndexManager) {
+  return <ErrorDisplay message="Manager not provided" />;
+}
+if (!codeIndexManager.isInitialized) {
+  return <ErrorDisplay message="Manager not initialized" details={...} />;
+}
+```
+
+### Configuration Validation Strategy
+
+**Learned Pattern:** Configuration validation should be warning-based for development, not blocking:
+
+```typescript
+// ❌ Blocks development when services are down
+if (!validation.isValid) {
+  throw new Error(`Validation failed: ${errors}`);
+}
+
+// ✅ Allows development with warnings
+if (!validation.isValid) {
+  console.warn('Config validation warnings:', errors);
+  // Continue with reduced functionality
+}
+```
+
+### Debugging Commands for Future Reference
+
+```bash
+# Always run type check after React state changes
+npm run type-check
+
+# For TUI debugging, look for these console patterns:
+# "🚀 开始索引进程..." → "✨ 索引进程全部完成!"
+# Any gap indicates hang point in orchestrator
+```
+
+This debugging experience revealed critical React integration patterns that apply to any UI framework integration with CodeIndexManager.

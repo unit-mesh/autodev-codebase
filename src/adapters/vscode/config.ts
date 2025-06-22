@@ -46,6 +46,10 @@ export class VSCodeConfigProvider implements IConfigProvider {
     }
   }
 
+  async getConfig(): Promise<CodeIndexConfig> {
+    return this.getFullConfig()
+  }
+
   onConfigChange(callback: (config: CodeIndexConfig) => void): () => void {
     const disposable = this.workspace.onDidChangeConfiguration(async (event) => {
       if (event.affectsConfiguration(this.configSection)) {

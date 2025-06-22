@@ -18,7 +18,7 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
   return (
     <Box flexDirection="column">
       <Text bold color="magenta">📋 System Logs</Text>
-      
+
       <Box marginTop={1} flexDirection="column">
         {logs.length === 0 ? (
           <Text color="gray">No logs yet...</Text>
@@ -30,9 +30,9 @@ export const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
           ))
         )}
       </Box>
-      
+
       {logs.length > 15 && (
-        <Box marginTop={1}>
+        <Box >
           <Text color="gray">
             ... showing last 15 of {logs.length} logs
           </Text>

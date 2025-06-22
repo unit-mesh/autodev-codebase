@@ -64,6 +64,10 @@ export class NodeConfigProvider implements IConfigProvider {
     }
   }
 
+  async getConfig(): Promise<CodeIndexConfig> {
+    return this.loadConfig()
+  }
+
   onConfigChange(callback: (config: CodeIndexConfig) => void): () => void {
     this.changeCallbacks.push(callback)
 

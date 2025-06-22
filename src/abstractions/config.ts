@@ -35,6 +35,11 @@ export interface IConfigProvider {
   getSearchConfig(): Promise<SearchConfig>
   
   /**
+   * Get complete configuration object
+   */
+  getConfig(): Promise<CodeIndexConfig>
+  
+  /**
    * Watch for configuration changes
    */
   onConfigChange(callback: (config: CodeIndexConfig) => void): () => void

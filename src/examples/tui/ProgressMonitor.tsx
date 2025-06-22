@@ -33,7 +33,7 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
     if (!codeIndexManager) {
       return undefined;
     }
-    
+
     const updateStatus = () => {
       const currentStatus = codeIndexManager.getCurrentStatus();
       setStatus(currentStatus);
@@ -46,11 +46,11 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
 
   const getProgressBar = (processed: number, total: number) => {
     if (total === 0) return '▓▓▓▓▓▓▓▓▓▓';
-    
+
     const percentage = Math.min(processed / total, 1);
     const filled = Math.round(percentage * 20);
     const empty = 20 - filled;
-    
+
     return '█'.repeat(filled) + '░'.repeat(empty);
   };
 
@@ -67,7 +67,7 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
   return (
     <Box flexDirection="column">
       <Text bold color="blue">📊 Progress Monitor</Text>
-      
+
       <Box marginTop={1} flexDirection="column">
         <Text>
           <Text color="gray">Status: </Text>
@@ -75,10 +75,10 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
             {status?.systemStatus || 'Unknown'}
           </Text>
         </Text>
-        
+
         {status && (
           <>
-            <Box marginTop={1}>
+            <Box >
               {status.totalItems !== undefined && (
                 <Text>
                   <Text color="gray">Total Items: </Text>
@@ -86,8 +86,8 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
                 </Text>
               )}
             </Box>
-            
-            <Box marginTop={1}>
+
+            <Box >
               <Text>
                 <Text color="gray">Progress: </Text>
                 <Text color="white">
@@ -95,23 +95,23 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
                 </Text>
               </Text>
             </Box>
-            
-            <Box marginTop={1}>
+
+            <Box >
               <Text>{getProgressBar(progress.processedItems, progress.totalItems)}</Text>
               <Text color="gray"> {progress.totalItems > 0 ? Math.round((progress.processedItems / progress.totalItems) * 100) : 0}%</Text>
             </Box>
           </>
         )}
-        
-        <Box marginTop={1}>
+
+        <Box >
           <Text>
             <Text color="gray">Message: </Text>
             <Text color="cyan">{progress.message}</Text>
           </Text>
         </Box>
-        
+
         {status?.lastUpdate && (
-          <Box marginTop={1}>
+          <Box >
             <Text>
               <Text color="gray">Last Update: </Text>
               <Text color="white">{new Date(status.lastUpdate).toLocaleTimeString()}</Text>

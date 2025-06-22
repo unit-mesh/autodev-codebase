@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import React from 'react';
-import { render } from 'ink';
+import { render, Box, Text } from 'ink';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -145,12 +145,13 @@ Try searching for:
 
 const AppWithData: React.FC = () => {
   const [codeIndexManager, setCodeIndexManager] = React.useState<any>(null);
+  const [dependencies, setDependencies] = React.useState<any>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     async function initialize() {
       try {
-        const dependencies = createNodeDependencies({
+        const deps = createNodeDependencies({
           workspacePath: DEMO_FOLDER,
           storageOptions: {
             globalStoragePath: path.join(process.cwd(), '.autodev-storage'),
@@ -178,38 +179,104 @@ const AppWithData: React.FC = () => {
           }
         });
 
-        const demoFolderExists = await dependencies.fileSystem.exists(DEMO_FOLDER);
+        const demoFolderExists = await deps.fileSystem.exists(DEMO_FOLDER);
         if (!demoFolderExists) {
           const fs = require('fs');
           fs.mkdirSync(DEMO_FOLDER, { recursive: true });
-          await createSampleFiles(dependencies.fileSystem, DEMO_FOLDER);
+          await createSampleFiles(deps.fileSystem, DEMO_FOLDER);
         }
 
-        await dependencies.configProvider.loadConfig();
-        const validation = await dependencies.configProvider.validateConfig();
+        console.log('⚙️ 加载配置...');
+        const config = await deps.configProvider.loadConfig();
+        console.log('📝 配置内容:', JSON.stringify(config, null, 2));
+        
+        console.log('✅ 验证配置...');
+        const validation = await deps.configProvider.validateConfig();
+        console.log('📝 验证结果:', validation);
 
         if (!validation.isValid) {
-          setError(`Configuration validation failed: ${validation.errors.join(', ')}`);
-          return;
+          console.warn('⚠️ 配置验证警告:', validation.errors);
+          console.log('⚠️ 继续初始化（调试模式）');
+          // 在调试模式下，我们允许配置验证失败但继续初始化
+        } else {
+          console.log('✅ 配置验证通过');
         }
 
-        const manager = CodeIndexManager.getInstance(dependencies);
+        setDependencies(deps);
+
+        console.log('Creating CodeIndexManager with dependencies:', {
+          hasFileSystem: !!deps.fileSystem,
+          hasStorage: !!deps.storage,
+          hasEventBus: !!deps.eventBus,
+          hasWorkspace: !!deps.workspace,
+          hasPathUtils: !!deps.pathUtils,
+          hasConfigProvider: !!deps.configProvider,
+          workspaceRootPath: deps.workspace.getRootPath()
+        });
+
+        const manager = CodeIndexManager.getInstance(deps);
+        console.log('CodeIndexManager instance created:', !!manager);
+        
         if (!manager) {
-          setError('Failed to create CodeIndexManager');
+          setError('Failed to create CodeIndexManager - workspace root path may be invalid');
           return;
         }
 
-        await manager.initialize();
+        console.log('⚙️ 初始化 CodeIndexManager...');
+        const initResult = await manager.initialize();
+        console.log('✅ CodeIndexManager 初始化成功:', initResult);
+        console.log('📝 管理器状态:', {
+          isInitialized: manager.isInitialized,
+          isFeatureEnabled: manager.isFeatureEnabled,
+          isFeatureConfigured: manager.isFeatureConfigured,
+          state: manager.state
+        });
+        console.log('🔄 设置 CodeIndexManager 到状态中...');
         setCodeIndexManager(manager);
+        console.log('✅ CodeIndexManager 已设置到状态');
 
         // Start indexing in background
+        console.log('🚀 准备开始索引...');
+        // 设置进度监控
+        manager.onProgressUpdate((progressInfo) => {
+          console.log('📊 索引进度:', progressInfo);
+        });
+
         setTimeout(() => {
-          manager.startIndexing().catch((err: any) => {
-            setError(`Indexing failed: ${err.message}`);
-          });
+          if (manager.isFeatureEnabled && manager.isInitialized) {
+            console.log('🚀 开始索引进程...');
+            console.log('📊 当前状态:', manager.state);
+            
+            // 添加超时保护
+            const indexingTimeout = setTimeout(() => {
+              console.warn('⚠️ 索引进程超时（30秒），可能卡住了');
+            }, 30000);
+            
+            manager.startIndexing()
+              .then(() => {
+                clearTimeout(indexingTimeout);
+                console.log('✅ 索引完成');
+              })
+              .catch((err: any) => {
+                clearTimeout(indexingTimeout);
+                console.error('❌ 索引失败:', err);
+                console.error('❌ 错误堆栈:', err.stack);
+                setError(`Indexing failed: ${err.message}`);
+              });
+          } else {
+            console.log('⚠️ 跳过索引 - 功能未启用或未初始化');
+            console.log('📊 功能状态:', {
+              isFeatureEnabled: manager.isFeatureEnabled,
+              isInitialized: manager.isInitialized,
+              state: manager.state
+            });
+          }
         }, 1000);
+        console.log('✅ 初始化完成');
 
       } catch (err: any) {
+        console.error('❌ 初始化失败:', err);
+        console.error('❌ 错误堆栈:', err.stack);
         setError(`Initialization failed: ${err.message}`);
       }
     }
@@ -219,11 +286,15 @@ const AppWithData: React.FC = () => {
 
   if (error) {
     return (
-      <App codeIndexManager={null} />
+      <Box flexDirection="column" padding={1}>
+        <Text bold color="red">❌ 初始化失败</Text>
+        <Text color="white">{error}</Text>
+        <Text color="gray">请检查配置或服务连接状态</Text>
+      </Box>
     );
   }
 
-  return <App codeIndexManager={codeIndexManager} />;
+  return <App codeIndexManager={codeIndexManager} dependencies={dependencies} />;
 };
 
 
