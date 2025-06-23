@@ -7,7 +7,7 @@ import { CodeIndexSearchService } from "./search-service"
 import { CodeIndexOrchestrator } from "./orchestrator"
 import { CacheManager } from "./cache-manager"
 import { IConfigProvider } from "../abstractions/config"
-import { IFileSystem, IStorage, IEventBus } from "../abstractions/core"
+import { IFileSystem, IStorage, IEventBus, ILogger } from "../abstractions/core"
 import { IWorkspace, IPathUtils } from "../abstractions/workspace"
 import ignore from "ignore"
 
@@ -18,6 +18,7 @@ export interface CodeIndexManagerDependencies {
 	workspace: IWorkspace
 	pathUtils: IPathUtils
 	configProvider: IConfigProvider
+	logger?: ILogger
 }
 
 export class CodeIndexManager implements ICodeIndexManager {
@@ -145,6 +146,7 @@ export class CodeIndexManager implements ICodeIndexManager {
 				this._configManager,
 				this.workspacePath,
 				this._cacheManager,
+				this.dependencies.logger,
 			)
 
 			const ignoreInstance = ignore()
@@ -170,6 +172,7 @@ export class CodeIndexManager implements ICodeIndexManager {
 				vectorStore,
 				scanner,
 				fileWatcher,
+				this.dependencies.logger,
 			)
 
 			// (Re)Initialize search service

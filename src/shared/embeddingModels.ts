@@ -45,8 +45,6 @@ export const EMBEDDING_MODEL_PROFILES: EmbeddingModelProfiles = {
  */
 export function getModelDimension(provider: EmbedderProvider, modelId: string): number | undefined {
 	const providerProfiles = EMBEDDING_MODEL_PROFILES[provider]
-	console.log(`Debug getModelDimension: provider=${provider}, modelId=${modelId}`)
-	console.log(`Debug providerProfiles:`, providerProfiles)
 
 	if (!providerProfiles) {
 		console.warn(`Provider not found in profiles: ${provider}`)
@@ -54,7 +52,6 @@ export function getModelDimension(provider: EmbedderProvider, modelId: string): 
 	}
 
 	const modelProfile = providerProfiles[modelId]
-	console.log(`Debug modelProfile for ${modelId}:`, modelProfile)
 
 	if (!modelProfile) {
 		console.warn(`Model not found for provider ${provider}: ${modelId}`)

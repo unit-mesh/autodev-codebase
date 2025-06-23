@@ -84,7 +84,7 @@ export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ 
       <Box flexDirection="row" flexGrow={1}>
         <Box width="25%" borderStyle="single" borderColor="gray" padding={1} paddingTop={0} flexDirection="column">
           <Text bold>Navigation</Text>
-          <Box flexDirection="column">
+          <Box flexDirection="column" marginTop={1}>
             {VIEWS.map(view => (
               <Text
                 key={view}

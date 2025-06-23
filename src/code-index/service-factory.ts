@@ -8,7 +8,7 @@ import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "./interfaces
 import { CodeIndexConfigManager } from "./config-manager"
 import { CacheManager } from "./cache-manager"
 import { Ignore } from "ignore"
-import { IEventBus, IFileSystem } from "../abstractions/core"
+import { IEventBus, IFileSystem, ILogger } from "../abstractions/core"
 import { IWorkspace, IPathUtils } from "../abstractions/workspace"
 
 /**
@@ -19,7 +19,27 @@ export class CodeIndexServiceFactory {
 		private readonly configManager: CodeIndexConfigManager,
 		private readonly workspacePath: string,
 		private readonly cacheManager: CacheManager,
+		private readonly logger?: ILogger,
 	) {}
+
+	/**
+	 * Logging helper methods - only log if logger is available
+	 */
+	private debug(message: string, ...args: any[]): void {
+		this.logger?.debug(message, ...args)
+	}
+
+	private info(message: string, ...args: any[]): void {
+		this.logger?.info(message, ...args)
+	}
+
+	private warn(message: string, ...args: any[]): void {
+		this.logger?.warn(message, ...args)
+	}
+
+	private error(message: string, ...args: any[]): void {
+		this.logger?.error(message, ...args)
+	}
 
 	/**
 	 * Creates an embedder instance based on the current configuration.
@@ -64,13 +84,13 @@ export class CodeIndexServiceFactory {
 	 */
 	public createVectorStore(): IVectorStore {
 		const config = this.configManager.getConfig()
-		console.log(`Debug createVectorStore config:`, JSON.stringify(config, null, 2))
+		this.debug(`Debug createVectorStore config:`, JSON.stringify(config, null, 2))
 
 		const provider = config.embedderProvider as EmbedderProvider
 		const defaultModel = getDefaultModelId(provider)
 		// Use the embedding model ID from config, not the chat model IDs
 		const modelId = config.modelId ?? defaultModel
-		console.log(`Debug: provider=${provider}, defaultModel=${defaultModel}, modelId=${modelId}`)
+		this.debug(`Debug: provider=${provider}, defaultModel=${defaultModel}, modelId=${modelId}`)
 
 		let vectorSize: number | undefined
 
@@ -82,10 +102,10 @@ export class CodeIndexServiceFactory {
 				vectorSize = getModelDimension(provider, modelId)
 			}
 		} else {
-			console.log(`About to call getModelDimension with provider=${provider}, modelId=${modelId}`)
+			this.debug(`About to call getModelDimension with provider=${provider}, modelId=${modelId}`)
 			vectorSize = getModelDimension(provider, modelId)
-			console.log(`After getModelDimension call: vectorSize=${vectorSize}`)
-			console.log(`Debug: provider=${provider}, modelId=${modelId}, vectorSize=${vectorSize}`)
+			this.debug(`After getModelDimension call: vectorSize=${vectorSize}`)
+			this.debug(`Debug: provider=${provider}, modelId=${modelId}, vectorSize=${vectorSize}`)
 		}
 
 		if (vectorSize === undefined) {
@@ -127,7 +147,8 @@ export class CodeIndexServiceFactory {
 			ignoreInstance,
 			fileSystem,
 			workspace,
-			pathUtils
+			pathUtils,
+			logger: this.logger
 		})
 	}
 

@@ -22,20 +22,20 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   onLog
 }) => {
   useEffect(() => {
-    console.log('SearchInterface received codeIndexManager:', {
+    onLog(`SearchInterface received codeIndexManager: ${JSON.stringify({
       exists: !!codeIndexManager,
       type: typeof codeIndexManager,
       isInitialized: codeIndexManager?.isInitialized,
       isFeatureEnabled: codeIndexManager?.isFeatureEnabled,
       state: codeIndexManager?.state
-    });
-    console.log('SearchInterface received dependencies:', {
+    }, null, 2)}`);
+    onLog(`SearchInterface received dependencies: ${JSON.stringify({
       exists: !!dependencies,
       type: typeof dependencies,
       hasWorkspace: !!dependencies?.workspace,
       workspaceType: typeof dependencies?.workspace,
       workspaceRootPath: dependencies?.workspace?.getRootPath?.()
-    });
+    }, null, 2)}`);
   }, [codeIndexManager, dependencies]);
 
   if (!codeIndexManager) {
@@ -67,8 +67,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   const [tempFilterValue, setTempFilterValue] = useState('');
   const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set());
   const [currentPage, setCurrentPage] = useState(0);
-  const [itemsPerPage] = useState(3);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [itemsPerPage] = useState(6);
   const [columnsCount, setColumnsCount] = useState(2);
   const [filters, setFilters] = useState<SearchFilter>({
     fileTypes: [],
@@ -83,6 +82,12 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   });
 
   useInput(async (input, key) => {
+    onLog(`Control key combo detected: ${JSON.stringify({
+            input,
+            inputLength: input?.length,
+            inputCharCode: input ? input.charCodeAt(0) : null,
+            key
+          }, null, 2)}`);
     // Handle special modes first - with priority to prevent conflicts
     if (showFilters) {
       // In filter mode, we handle ALL input to prevent conflicts with parent App
@@ -175,93 +180,56 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       await performSearch();
     } else if (key.upArrow && results.length > 0) {
       setSelectedIndex(prev => {
-        if (viewMode === 'grid') {
-          // Grid navigation: move up by columnsCount
-          const newIndex = Math.max(0, prev - columnsCount);
-          const newPage = Math.floor(newIndex / itemsPerPage);
-          if (newPage !== currentPage) {
-            setCurrentPage(newPage);
-          }
-          return newIndex;
-        } else {
-          // List navigation: move up by 1
-          const newIndex = Math.max(0, prev - 1);
-          const newPage = Math.floor(newIndex / itemsPerPage);
-          if (newPage !== currentPage) {
-            setCurrentPage(newPage);
-          }
-          return newIndex;
+        // Grid navigation: move up by columnsCount
+        const newIndex = Math.max(0, prev - columnsCount);
+        const newPage = Math.floor(newIndex / itemsPerPage);
+        if (newPage !== currentPage) {
+          setCurrentPage(newPage);
         }
+        return newIndex;
       });
     } else if (key.downArrow && results.length > 0) {
       setSelectedIndex(prev => {
-        if (viewMode === 'grid') {
-          // Grid navigation: move down by columnsCount
-          const newIndex = Math.min(results.length - 1, prev + columnsCount);
-          const newPage = Math.floor(newIndex / itemsPerPage);
-          if (newPage !== currentPage) {
-            setCurrentPage(newPage);
-          }
-          return newIndex;
-        } else {
-          // List navigation: move down by 1
-          const newIndex = Math.min(results.length - 1, prev + 1);
-          const newPage = Math.floor(newIndex / itemsPerPage);
-          if (newPage !== currentPage) {
-            setCurrentPage(newPage);
-          }
-          return newIndex;
+        // Grid navigation: move down by columnsCount
+        const newIndex = Math.min(results.length - 1, prev + columnsCount);
+        const newPage = Math.floor(newIndex / itemsPerPage);
+        if (newPage !== currentPage) {
+          setCurrentPage(newPage);
         }
+        return newIndex;
       });
     } else if (key.leftArrow && results.length > 0) {
-      if (viewMode === 'grid') {
-        // Grid navigation: move left by 1 (with wrapping)
-        setSelectedIndex(prev => {
-          const currentPageStart = currentPage * itemsPerPage;
-          const currentPageEnd = Math.min(results.length - 1, (currentPage + 1) * itemsPerPage - 1);
+      // Grid navigation: move left by 1 (with wrapping)
+      setSelectedIndex(prev => {
+        const currentPageStart = currentPage * itemsPerPage;
+        const currentPageEnd = Math.min(results.length - 1, (currentPage + 1) * itemsPerPage - 1);
 
-          if (prev > currentPageStart) {
-            // Move left within current page
-            return prev - 1;
-          } else if (currentPage > 0) {
-            // Move to previous page, last item
-            setCurrentPage(currentPage - 1);
-            return Math.min(results.length - 1, (currentPage - 1 + 1) * itemsPerPage - 1);
-          }
-          return prev;
-        });
-      } else {
-        // List navigation: previous page
-        if (currentPage > 0) {
-          setCurrentPage(prev => prev - 1);
-          setSelectedIndex(prev => Math.min(prev, (currentPage - 1) * itemsPerPage));
+        if (prev > currentPageStart) {
+          // Move left within current page
+          return prev - 1;
+        } else if (currentPage > 0) {
+          // Move to previous page, last item
+          setCurrentPage(currentPage - 1);
+          return Math.min(results.length - 1, (currentPage - 1 + 1) * itemsPerPage - 1);
         }
-      }
+        return prev;
+      });
     } else if (key.rightArrow && results.length > 0) {
-      if (viewMode === 'grid') {
-        // Grid navigation: move right by 1 (with wrapping)
-        setSelectedIndex(prev => {
-          const currentPageEnd = Math.min(results.length - 1, (currentPage + 1) * itemsPerPage - 1);
-          const totalPages = Math.ceil(results.length / itemsPerPage);
-
-          if (prev < currentPageEnd) {
-            // Move right within current page
-            return prev + 1;
-          } else if (currentPage < totalPages - 1) {
-            // Move to next page, first item
-            setCurrentPage(currentPage + 1);
-            return (currentPage + 1) * itemsPerPage;
-          }
-          return prev;
-        });
-      } else {
-        // List navigation: next page
+      // Grid navigation: move right by 1 (with wrapping)
+      setSelectedIndex(prev => {
+        const currentPageEnd = Math.min(results.length - 1, (currentPage + 1) * itemsPerPage - 1);
         const totalPages = Math.ceil(results.length / itemsPerPage);
-        if (currentPage < totalPages - 1) {
-          setCurrentPage(prev => prev + 1);
-          setSelectedIndex((currentPage + 1) * itemsPerPage);
+
+        if (prev < currentPageEnd) {
+          // Move right within current page
+          return prev + 1;
+        } else if (currentPage < totalPages - 1) {
+          // Move to next page, first item
+          setCurrentPage(currentPage + 1);
+          return (currentPage + 1) * itemsPerPage;
         }
-      }
+        return prev;
+      });
     } else if (key.pageUp && results.length > 0) {
       // Previous page
       if (currentPage > 0) {
@@ -275,7 +243,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         setCurrentPage(prev => prev + 1);
         setSelectedIndex((currentPage + 1) * itemsPerPage);
       }
-    } else if (input === ' ' && results.length > 0) {
+    } else if (input === 't' && key.ctrl) {
       // Space to expand/collapse result details
       const newExpanded = new Set(expandedResults);
       if (newExpanded.has(selectedIndex)) {
@@ -292,14 +260,11 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     } else if (input === 'o' && key.ctrl && results.length > 0) {
       // Ctrl+O to open in external editor
       await openInExternalEditor();
-    } else if (input === 'v' && key.ctrl) {
-      // Ctrl+V to toggle view mode
-      setViewMode(prev => prev === 'list' ? 'grid' : 'list');
-    } else if (input === '+' && viewMode === 'grid') {
-      // + to increase columns in grid view
+    } else if (input === 'y' && key.ctrl) {
+      // Ctrl+] to increase columns in grid view
       setColumnsCount(prev => Math.min(4, prev + 1));
-    } else if (input === '-' && viewMode === 'grid') {
-      // - to decrease columns in grid view
+    } else if (input === 'u' && key.ctrl) {
+      // Ctrl+[ to decrease columns in grid view
       setColumnsCount(prev => Math.max(1, prev - 1));
     } else if (input && input.length === 1 && !key.ctrl && !key.meta && !key.escape) {
       // Only handle single character input to avoid issues with special keys
@@ -409,6 +374,13 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     return text.substring(0, maxLength) + '...';
   };
 
+  const truncateToSingleLine = (text: string, maxLength: number) => {
+    // Remove all line breaks and normalize whitespace
+    const singleLine = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if (singleLine.length <= maxLength) return singleLine;
+    return singleLine.substring(0, maxLength) + '...';
+  };
+
   // Filters Panel
   if (showFilters) {
     const getCurrentValue = () => {
@@ -462,8 +434,8 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
           <Box>
             <Text color="blue">Input: </Text>
             <Text
-              color="white"
-              backgroundColor="blue"
+              color="black"
+              backgroundColor="cyan"
             >
               {getCurrentValue() || getPlaceholder()}
             </Text>
@@ -491,15 +463,15 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
 
       <Box marginTop={1}>
         <Text color="gray">Query: </Text>
-        <Text color="white" backgroundColor={query ? 'blue' : undefined}>
-          {query || 'Type to search...'}
+        <Text color={query ? 'black' : 'gray'} backgroundColor={query ? 'cyan' : undefined}>
+          {query || '[Type to search...]'}
         </Text>
         {isSearching && <Text color="yellow"> [Searching...]</Text>}
       </Box>
 
       <Box>
         <Text color="gray">
-          Enter: search • {viewMode === 'grid' ? '↑↓←→: navigate grid • ' : '↑↓: navigate • ←→: pages • '}PgUp/PgDn: pages • Space: expand • Ctrl+F: filters • Ctrl+O: open • Ctrl+V: view mode{viewMode === 'grid' ? ' • +/-: columns' : ''}
+          Enter: search • ↑↓←→: navigate grid • PgUp/PgDn: pages • Ctrl+T: expand • Ctrl+F: filters • Ctrl+O: open • Ctrl+Y/U: columns
         </Text>
       </Box>
 
@@ -521,97 +493,63 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
             <Text bold>Results ({results.length}):</Text>
             <Box>
               <Text color="gray">
-                {viewMode === 'grid' ? `${columnsCount} cols • ` : ''}
-                Page {currentPage + 1}/{Math.ceil(results.length / itemsPerPage)}
+                {columnsCount} cols • Page {currentPage + 1}/{Math.ceil(results.length / itemsPerPage)}
               </Text>
             </Box>
           </Box>
 
-          {viewMode === 'list' ? (
-            // List view (original layout)
-            <>
-              {results.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage).map((result, index) => (
-                <Box
-                  key={currentPage * itemsPerPage + index}
-                  paddingX={1}
-                  borderStyle={currentPage * itemsPerPage + index === selectedIndex ? 'single' : undefined}
-                  borderColor={currentPage * itemsPerPage + index === selectedIndex ? 'blue' : undefined}
-                >
-                  <Box flexDirection="column">
-                    <Text
-                      color={currentPage * itemsPerPage + index === selectedIndex ? 'white' : 'cyan'}
-                      backgroundColor={currentPage * itemsPerPage + index === selectedIndex ? 'blue' : undefined}
+          {/* Grid view */}
+          <Box flexDirection="column">
+            {Array.from({ length: Math.ceil(results.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage).length / columnsCount) }).map((_, rowIndex) => (
+              <Box key={rowIndex} flexDirection="row">
+                {Array.from({ length: columnsCount }).map((_, colIndex) => {
+                  const itemIndex = rowIndex * columnsCount + colIndex;
+                  const globalIndex = currentPage * itemsPerPage + itemIndex;
+                  const result = results[globalIndex];
+
+                  if (!result) return <Box key={colIndex} flexGrow={1} />;
+
+                  return (
+                    <Box
+                      key={colIndex}
+                      flexGrow={1}
+                      paddingX={1}
+                      marginRight={colIndex < columnsCount - 1 ? 1 : 0}
+                      borderStyle="single"
+                      borderColor={globalIndex === selectedIndex ? 'cyan' : 'white'}
                     >
-                      {currentPage * itemsPerPage + index + 1}. {truncateText(result.payload?.filePath || 'Unknown file', 50)}
-                      {expandedResults.has(currentPage * itemsPerPage + index) ? ' 📖' : ' 📄'}
-                    </Text>
-                    <Text color={currentPage * itemsPerPage + index === selectedIndex ? 'white' : 'gray'}>
-                      Score: {result.score.toFixed(3)} | Lines: {result.payload?.startLine}-{result.payload?.endLine}
-                    </Text>
-
-                    {expandedResults.has(currentPage * itemsPerPage + index) ? (
-                      <Box flexDirection="column" paddingLeft={2}>
-                        <Text color="yellow">Full Content:</Text>
-                        <Text color={currentPage * itemsPerPage + index === selectedIndex ? 'white' : 'gray'}>
-                          {result.payload?.codeChunk || 'No content available'}
+                      <Box flexDirection="column">
+                        <Text
+                          color={globalIndex === selectedIndex ? 'black' : 'cyan'}
+                          backgroundColor={globalIndex === selectedIndex ? 'cyan' : undefined}
+                        >
+                          {globalIndex + 1}. {expandedResults.has(globalIndex) ? result.payload?.filePath : truncateText(result.payload?.filePath?.split('/').pop() || 'Unknown', 15)} {result.score.toFixed(2)} | L{result.payload?.startLine}-{result.payload?.endLine}
+                          {expandedResults.has(globalIndex) ? ' 📖' : ' 📄'}
                         </Text>
+                        {expandedResults.has(globalIndex) ? (
+                          <Box flexDirection="column" paddingLeft={1}>
+                            <Text color="yellow">Full Content:</Text>
+                            <Text >
+                              {result.payload?.codeChunk || 'No content available'}
+                            </Text>
+                          </Box>
+                        ) : (
+                          <Text dimColor>
+                            {truncateToSingleLine(result.payload?.codeChunk || '', 60)}
+                          </Text>
+                        )}
                       </Box>
-                    ) : (
-                      <Text color={currentPage * itemsPerPage + index === selectedIndex ? 'white' : 'gray'}>
-                        {truncateText(result.payload?.codeChunk || '', 80)}
-                      </Text>
-                    )}
-                  </Box>
-                </Box>
-              ))}
-            </>
-          ) : (
-            // Grid view (new compact layout)
-            <Box flexDirection="column">
-              {Array.from({ length: Math.ceil(results.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage).length / columnsCount) }).map((_, rowIndex) => (
-                <Box key={rowIndex} flexDirection="row">
-                  {Array.from({ length: columnsCount }).map((_, colIndex) => {
-                    const itemIndex = rowIndex * columnsCount + colIndex;
-                    const globalIndex = currentPage * itemsPerPage + itemIndex;
-                    const result = results[globalIndex];
-
-                    if (!result) return <Box key={colIndex} flexGrow={1} />;
-
-                    return (
-                      <Box
-                        key={colIndex}
-                        flexGrow={1}
-                        paddingX={1}
-                        marginRight={colIndex < columnsCount - 1 ? 1 : 0}
-                        borderStyle={globalIndex === selectedIndex ? 'single' : undefined}
-                        borderColor={globalIndex === selectedIndex ? 'blue' : undefined}
-                      >
-                        <Box flexDirection="column">
-                          <Text
-                            color={globalIndex === selectedIndex ? 'white' : 'cyan'}
-                            backgroundColor={globalIndex === selectedIndex ? 'blue' : undefined}
-                          >
-                            {globalIndex + 1}. {truncateText(result.payload?.filePath?.split('/').pop() || 'Unknown', 15)}
-                          </Text>
-                          <Text color={globalIndex === selectedIndex ? 'white' : 'gray'} dimColor>
-                            {result.score.toFixed(2)} | L{result.payload?.startLine}
-                          </Text>
-                          <Text color={globalIndex === selectedIndex ? 'white' : 'gray'} dimColor>
-                            {truncateText(result.payload?.codeChunk || '', 25)}
-                          </Text>
-                        </Box>
-                      </Box>
-                    );
-                  })}
-                </Box>
-              ))}
-            </Box>
-          )}
+                    </Box>
+                  );
+                })}
+              </Box>
+            ))}
+          </Box>
 
           {results.length > itemsPerPage && (
             <Box marginTop={1}>
               <Text color="cyan">
-                📄 Use ←→ or PgUp/PgDn to navigate pages{viewMode === 'grid' ? ' • Ctrl+V: switch to list view' : ''}
+                📄 Use ←→ or PgUp/PgDn to navigate pages
               </Text>
             </Box>
           )}
