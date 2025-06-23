@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
+import { Box, Text, useInput} from 'ink';
 import { exec } from 'child_process';
 import type { CodeIndexManager } from '../../code-index/manager';
 import type { VectorStoreSearchResult } from '../../code-index/interfaces';
@@ -74,12 +74,14 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     minSimilarity: 0.1,
     pathPattern: ''
   });
+  const [forceRefresh, setForceRefresh] = useState(0);
 
   const searchStatsRef = useRef({
     totalSearches: 0,
     avgResponseTime: 0,
     indexSize: 0
   });
+
 
   useInput(async (input, key) => {
     onLog(`Control key combo detected: ${JSON.stringify({
@@ -244,7 +246,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         setSelectedIndex((currentPage + 1) * itemsPerPage);
       }
     } else if (input === 't' && key.ctrl) {
-      // Space to expand/collapse result details
+      // Ctrl+T to expand/collapse result details
       const newExpanded = new Set(expandedResults);
       if (newExpanded.has(selectedIndex)) {
         newExpanded.delete(selectedIndex);
@@ -252,6 +254,10 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         newExpanded.add(selectedIndex);
       }
       setExpandedResults(newExpanded);
+      
+      // Force re-render to ensure UI updates immediately
+      setForceRefresh(prev => prev + 1);
+
     } else if (input === 'f' && key.ctrl) {
       // Ctrl+F to show filters
       setShowFilters(true);
@@ -452,12 +458,13 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   }
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" key={`main-${forceRefresh}`}>
       <Box flexDirection="row" justifyContent="space-between">
         <Text bold color="green">🔍 Search Playground</Text>
         <Text color="gray">
           Searches: {searchStatsRef.current.totalSearches} |
-          Avg: {searchStatsRef.current.avgResponseTime.toFixed(0)}ms
+          Avg: {searchStatsRef.current.avgResponseTime.toFixed(0)}ms |
+          Refresh: {forceRefresh}
         </Text>
       </Box>
 
@@ -499,19 +506,21 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
           </Box>
 
           {/* Grid view */}
-          <Box flexDirection="column">
+          <Box flexDirection="column" key={`grid-${forceRefresh}-${expandedResults.size}`}>
             {Array.from({ length: Math.ceil(results.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage).length / columnsCount) }).map((_, rowIndex) => (
-              <Box key={rowIndex} flexDirection="row">
+              <Box key={`row-${rowIndex}-${forceRefresh}`} flexDirection="row">
                 {Array.from({ length: columnsCount }).map((_, colIndex) => {
                   const itemIndex = rowIndex * columnsCount + colIndex;
                   const globalIndex = currentPage * itemsPerPage + itemIndex;
                   const result = results[globalIndex];
 
-                  if (!result) return <Box key={colIndex} flexGrow={1} />;
+                  if (!result) return <Box key={`empty-${colIndex}-${forceRefresh}`} flexGrow={1} />;
 
+                  const isExpanded = expandedResults.has(globalIndex);
+                  
                   return (
                     <Box
-                      key={colIndex}
+                      key={`item-${globalIndex}-${isExpanded ? 'exp' : 'col'}-${forceRefresh}`}
                       flexGrow={1}
                       paddingX={1}
                       marginRight={colIndex < columnsCount - 1 ? 1 : 0}
@@ -523,18 +532,18 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
                           color={globalIndex === selectedIndex ? 'black' : 'cyan'}
                           backgroundColor={globalIndex === selectedIndex ? 'cyan' : undefined}
                         >
-                          {globalIndex + 1}. {expandedResults.has(globalIndex) ? result.payload?.filePath : truncateText(result.payload?.filePath?.split('/').pop() || 'Unknown', 15)} {result.score.toFixed(2)} | L{result.payload?.startLine}-{result.payload?.endLine}
-                          {expandedResults.has(globalIndex) ? ' 📖' : ' 📄'}
+                          {globalIndex + 1}. {isExpanded ? result.payload?.filePath : truncateText(result.payload?.filePath?.split('/').pop() || 'Unknown', 15)} {result.score.toFixed(2)} | L{result.payload?.startLine}-{result.payload?.endLine}
+                          {isExpanded ? ' 📖' : ' 📄'}
                         </Text>
-                        {expandedResults.has(globalIndex) ? (
-                          <Box flexDirection="column" paddingLeft={1}>
+                        {isExpanded ? (
+                          <Box flexDirection="column" paddingLeft={1} key={`content-${globalIndex}-${forceRefresh}`}>
                             <Text color="yellow">Full Content:</Text>
                             <Text >
                               {result.payload?.codeChunk || 'No content available'}
                             </Text>
                           </Box>
                         ) : (
-                          <Text dimColor>
+                          <Text dimColor key={`preview-${globalIndex}-${forceRefresh}`}>
                             {truncateToSingleLine(result.payload?.codeChunk || '', 60)}
                           </Text>
                         )}

@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "type": "module",
   "bin": {
-    "autodev-codebase": "./dist/index.js"
+    "autodev-codebase": "./dist/cli.js"
   },
   "files": [
     "dist/**/*"
@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "rollup -c rollup.config.cjs --watch",
     "build": "rollup -c rollup.config.cjs",
-    "type-check": "npx tsc -p tsconfig.lib.json --noEmit",
+    "type-check": "npx tsc -p tsconfig.cli.json --noEmit",
     "demo-tui": "npx tsx src/examples/run-demo-tui.tsx"
   },
   "peerDependencies": {

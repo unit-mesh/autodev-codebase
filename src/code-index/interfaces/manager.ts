@@ -1,5 +1,5 @@
 import { VectorStoreSearchResult } from "./vector-store"
-import { IndexingState } from "../state-manager"
+import type { IndexingState } from "../state-manager"
 
 // Re-export IndexingState for external use
 export { IndexingState }

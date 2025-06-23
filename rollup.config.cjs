@@ -54,46 +54,112 @@ function copyFilesPlugin() {
         console.warn(`[copyWasms] yoga.wasm not found at ${yogaWasmPath}`)
       }
 
+      // Copy tree-sitter WASM files from src/tree-sitter to dist
+      const treeSitterSrcDir = path.join(srcDir, "src", "tree-sitter")
+      const treeSitterDistDir = path.join(distDir, "tree-sitter")
+      
+      if (fs.existsSync(treeSitterSrcDir)) {
+        // Ensure tree-sitter directory exists in dist
+        if (!fs.existsSync(treeSitterDistDir)) {
+          fs.mkdirSync(treeSitterDistDir, { recursive: true })
+        }
+        
+        // Copy all WASM files
+        const wasmFiles = fs.readdirSync(treeSitterSrcDir).filter(file => file.endsWith('.wasm'))
+        wasmFiles.forEach(filename => {
+          const srcPath = path.join(treeSitterSrcDir, filename)
+          const destPath = path.join(treeSitterDistDir, filename)
+          fs.copyFileSync(srcPath, destPath)
+        })
+        
+        console.log(`[copyWasms] Copied ${wasmFiles.length} tree-sitter WASM files to ${treeSitterDistDir}`)
+      } else {
+        console.warn(`[copyWasms] tree-sitter source directory not found at ${treeSitterSrcDir}`)
+      }
+
     }
   };
 }
 
-module.exports = {
-  input: 'src/index.ts',
-  output: {
-    file: 'dist/index.js',
-    format: 'esm',
-    sourcemap: true,
-    inlineDynamicImports: true,
+module.exports = [
+  // Main library build
+  {
+    input: 'src/index.ts',
+    output: {
+      file: 'dist/index.js',
+      format: 'esm',
+      sourcemap: true,
+      inlineDynamicImports: true,
+    },
+    external: (id) => {
+      // Externalize vscode and its submodules
+      if (id === 'vscode' || id.startsWith('vscode/')) {
+        return true;
+      }
+      // Externalize optional dependencies that should not be bundled
+      if (id === 'react-devtools-core' || id.includes('react-devtools-core')) {
+        return true;
+      }
+      // Externalize Node.js built-ins that shouldn't be bundled
+      if (['fs', 'path', 'child_process', 'readline', 'crypto', 'os', 'stream', 'util'].includes(id)) {
+        return true;
+      }
+      // Bundle everything else (including fzf, tslib, etc.)
+      return false;
+    },
+    plugins: [
+      copyFilesPlugin(),
+      json(),
+      resolve({
+        preferBuiltins: true,
+        ignoreMissing: ['react-devtools-core'],
+      }),
+      commonjs(),
+      typescript({
+        tsconfig: './tsconfig.cli.json',
+        rootDir: './src',
+        noEmitOnError: false,
+      }),
+    ],
   },
-  external: (id) => {
-    // Externalize vscode and its submodules
-    if (id === 'vscode' || id.startsWith('vscode/')) {
-      return true;
-    }
-    // Externalize optional dependencies that should not be bundled
-    if (id === 'react-devtools-core' || id.includes('react-devtools-core')) {
-      return true;
-    }
-    // Externalize Node.js built-ins that shouldn't be bundled
-    if (['fs', 'path', 'child_process', 'readline', 'crypto', 'os', 'stream', 'util'].includes(id)) {
-      return true;
-    }
-    // Bundle everything else (including fzf, tslib, etc.)
-    return false;
+  // CLI build
+  {
+    input: 'src/cli.ts',
+    output: {
+      file: 'dist/cli.js',
+      format: 'esm',
+      sourcemap: true,
+      inlineDynamicImports: true,
+      banner: '#!/usr/bin/env node',
+    },
+    external: (id) => {
+      // Externalize vscode and its submodules
+      if (id === 'vscode' || id.startsWith('vscode/')) {
+        return true;
+      }
+      // Externalize optional dependencies that should not be bundled
+      if (id === 'react-devtools-core' || id.includes('react-devtools-core')) {
+        return true;
+      }
+      // Externalize Node.js built-ins that shouldn't be bundled
+      if (['fs', 'path', 'child_process', 'readline', 'crypto', 'os', 'stream', 'util'].includes(id)) {
+        return true;
+      }
+      // Bundle everything else (including fzf, tslib, etc.)
+      return false;
+    },
+    plugins: [
+      json(),
+      resolve({
+        preferBuiltins: true,
+        ignoreMissing: ['react-devtools-core'],
+      }),
+      commonjs(),
+      typescript({
+        tsconfig: './tsconfig.cli.json',
+        rootDir: './src',
+        noEmitOnError: false,
+      }),
+    ],
   },
-  plugins: [
-    copyFilesPlugin(),
-    json(),
-    resolve({
-      preferBuiltins: true,
-      ignoreMissing: ['react-devtools-core'],
-    }),
-    commonjs(),
-    typescript({
-      tsconfig: './tsconfig.cli.json',
-      rootDir: './src',
-      noEmitOnError: false,
-    }),
-  ],
-};
+];
