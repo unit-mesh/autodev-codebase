@@ -18,27 +18,25 @@ async function testFullParsing() {
     const parsers = await loadRequiredLanguageParsers(testFiles)
     console.log('✅ Parsers loaded:', Object.keys(parsers))
     
-    // Test 2: Create dependencies and parser
+    // Test 2: Create parser
     console.log('\n2️⃣ Creating CodeParser...')
-    const deps = createNodeDependencies('/Users/anrgct/workspace/autodev-workbench/packages/codebase/demo')
-    const codeParser = new CodeParser(deps)
+    const codeParser = new CodeParser()
     
     // Test 3: Parse each file
     console.log('\n3️⃣ Parsing individual files...')
     for (const filePath of testFiles) {
       try {
         console.log(`\n📄 Parsing ${filePath.split('/').pop()}...`)
-        const content = fs.readFileSync(filePath, 'utf-8')
-        console.log(`   Content length: ${content.length} chars`)
         
-        const result = await codeParser.parseContent(filePath, content)
+        const result = await codeParser.parseFile(filePath, {
+          // 可添加解析选项
+        })
         console.log(`   ✅ Parsed successfully:`, {
-          definitions: result.definitions.length,
-          blocks: result.blocks.length
+          blocks: result.length
         })
         
-        if (result.definitions.length > 0) {
-          console.log(`   📝 First definition:`, result.definitions[0])
+        if (result.length > 0) {
+          console.log(`   📝 First block:`, result[0])
         }
       } catch (error) {
         console.error(`   ❌ Error parsing ${filePath}:`, error.message)
