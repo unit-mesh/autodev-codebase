@@ -40,14 +40,14 @@ export function createTUIApp(options: CliOptions) {
     const [codeIndexManager, setCodeIndexManager] = React.useState<any>(null);
     const [dependencies, setDependencies] = React.useState<any>(null);
     const [error, setError] = React.useState<string | null>(null);
-
+    
     React.useEffect(() => {
       async function initialize() {
         // Create workspace path - use demo subdirectory if --demo flag is set
-        const workspacePath = options.demo 
+        const workspacePath = options.demo
           ? path.join(options.path, 'demo')
           : options.path;
-
+     
         const deps = createNodeDependencies({
           workspacePath,
           storageOptions: {
@@ -77,6 +77,9 @@ export function createTUIApp(options: CliOptions) {
         });
 
         try {
+          // Log workspace path after deps are created so we can use the logger
+          deps.logger.info('[tui-runner]📂 Workspace path:', workspacePath);
+          
           // Create demo files if requested
           if (options.demo) {
             const workspaceExists = await deps.fileSystem.exists(workspacePath);
@@ -131,7 +134,7 @@ export function createTUIApp(options: CliOptions) {
             isFeatureConfigured: manager.isFeatureConfigured,
             state: manager.state
           });
-          
+
           deps.logger.info('[tui-runner]🔄 Setting CodeIndexManager to state...');
           setCodeIndexManager(manager);
           deps.logger.info('[tui-runner]✅ CodeIndexManager set to state');
@@ -171,7 +174,7 @@ export function createTUIApp(options: CliOptions) {
               });
             }
           }, 1000);
-          
+
           deps.logger.info('[tui-runner]✅ Initialization completed');
 
         } catch (err: any) {

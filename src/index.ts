@@ -10,13 +10,15 @@ export async function main() {
     printHelp();
     process.exit(0);
   }
-  console.log(options)
+  
+  console.log('CLI options: ' + JSON.stringify(options) + '\n');
+  
   // Dynamic import to avoid loading TUI dependencies for library usage
   const { createTUIApp } = await import('./cli/tui-runner');
   const TUIApp = createTUIApp(options);
 
   render(React.createElement(TUIApp), {
-    patchConsole: false,
+    patchConsole: true,
     debug: false
   });
 }

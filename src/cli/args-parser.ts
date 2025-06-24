@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 export interface CliOptions {
   path: string;
   demo: boolean;
@@ -15,7 +13,7 @@ export interface CliOptions {
 
 export function parseArgs(argv: string[] = process.argv): CliOptions {
   const args = argv.slice(2);
-  
+
   const options: CliOptions = {
     path: process.cwd(),
     demo: false,
@@ -28,7 +26,7 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    
+
     if (arg === '--help' || arg === '-h') {
       options.help = true;
     } else if (arg === '--demo') {
@@ -68,16 +66,16 @@ Usage:
 Options:
   --path=<path>           Workspace path (default: current directory)
   --demo                  Create demo files in workspace
-  
+
   --ollama-url=<url>      Ollama API URL (default: http://localhost:11434)
   --qdrant-url=<url>      Qdrant vector DB URL (default: http://localhost:6333)
   --model=<model>         Embedding model (default: nomic-embed-text)
-  
+
   --config=<path>         Config file path
   --storage=<path>        Storage directory path
   --cache=<path>          Cache directory path
   --log-level=<level>     Log level: error|warn|info|debug (default: error)
-  
+
   --help, -h              Show this help
 
 Examples:

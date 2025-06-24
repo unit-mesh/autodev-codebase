@@ -16,6 +16,13 @@ interface SearchInterfaceProps {
   onLog: (message: string) => void;
 }
 
+const itemsPerPageMap: Record<number, number> = {
+  1: 5,   // 1列时每页6条
+  2: 6,   // 2列时每页6条
+  3: 9,   // 3列时每页9条
+  4: 12,  // 4列时每页12条
+};
+
 export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   codeIndexManager,
   dependencies,
@@ -67,8 +74,8 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
   const [tempFilterValue, setTempFilterValue] = useState('');
   const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set());
   const [currentPage, setCurrentPage] = useState(0);
-  const [itemsPerPage] = useState(6);
   const [columnsCount, setColumnsCount] = useState(2);
+  const [itemsPerPage, setItemsPerPage] = useState(itemsPerPageMap[columnsCount]);
   const [filters, setFilters] = useState<SearchFilter>({
     fileTypes: [],
     minSimilarity: 0.1,
@@ -254,7 +261,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         newExpanded.add(selectedIndex);
       }
       setExpandedResults(newExpanded);
-      
+
       // Force re-render to ensure UI updates immediately
       setForceRefresh(prev => prev + 1);
 
@@ -267,13 +274,30 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       // Ctrl+O to open in external editor
       await openInExternalEditor();
     } else if (input === 'y' && key.ctrl) {
-      // Ctrl+] to increase columns in grid view
-      setColumnsCount(prev => Math.min(4, prev + 1));
+      // Ctrl+y to increase columns in grid view
+      setColumnsCount(prev => {
+          const next = Math.min(4, prev + 1);
+          setItemsPerPage(itemsPerPageMap[next] || 6);
+          return next;
+      });
+      // clear other status
+      setExpandedResults(new Set());
+      setCurrentPage(0);
+      // setForceRefresh(prev => prev + 1);
     } else if (input === 'u' && key.ctrl) {
-      // Ctrl+[ to decrease columns in grid view
-      setColumnsCount(prev => Math.max(1, prev - 1));
-    } else if (input && input.length === 1 && !key.ctrl && !key.meta && !key.escape) {
-      // Only handle single character input to avoid issues with special keys
+      // Ctrl+u to decrease columns in grid view
+      setColumnsCount(prev => {
+          const next = Math.max(1, prev - 1);
+          setItemsPerPage(itemsPerPageMap[next] || 6);
+          return next;
+      });
+      // clear other status
+      setExpandedResults(new Set());
+      setCurrentPage(0);
+      // setForceRefresh(prev => prev + 1);
+    } else if (input && input.trim() && !key.ctrl && !key.meta && !key.escape && !key.return) {
+      // Handle character input (including multi-byte characters like Chinese)
+      // Remove length check to support Unicode characters that may have length > 1
       const newQuery = query + input;
       setQuery(newQuery);
       setSelectedIndex(0);
@@ -332,7 +356,6 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     if (results.length === 0 || selectedIndex >= results.length) return;
 
     const selectedResult = results[selectedIndex];
-    console.log(selectedResult)
     const relativePath = selectedResult.payload?.filePath;
     const lineNumber = selectedResult.payload?.startLine;
 
@@ -357,7 +380,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         `open "${fullFilePath}"`,
         `xdg-open "${fullFilePath}"`
       ];
-      console.log(commands)
+      onLog(commands.join(' | '));
       for (const cmd of commands) {
         try {
           exec(cmd, (error) => {
@@ -507,53 +530,72 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
 
           {/* Grid view */}
           <Box flexDirection="column" key={`grid-${forceRefresh}-${expandedResults.size}`}>
-            {Array.from({ length: Math.ceil(results.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage).length / columnsCount) }).map((_, rowIndex) => (
-              <Box key={`row-${rowIndex}-${forceRefresh}`} flexDirection="row">
-                {Array.from({ length: columnsCount }).map((_, colIndex) => {
-                  const itemIndex = rowIndex * columnsCount + colIndex;
-                  const globalIndex = currentPage * itemsPerPage + itemIndex;
-                  const result = results[globalIndex];
-
-                  if (!result) return <Box key={`empty-${colIndex}-${forceRefresh}`} flexGrow={1} />;
-
-                  const isExpanded = expandedResults.has(globalIndex);
-                  
-                  return (
-                    <Box
-                      key={`item-${globalIndex}-${isExpanded ? 'exp' : 'col'}-${forceRefresh}`}
-                      flexGrow={1}
-                      paddingX={1}
-                      marginRight={colIndex < columnsCount - 1 ? 1 : 0}
-                      borderStyle="single"
-                      borderColor={globalIndex === selectedIndex ? 'cyan' : 'white'}
-                    >
-                      <Box flexDirection="column">
-                        <Text
-                          color={globalIndex === selectedIndex ? 'black' : 'cyan'}
-                          backgroundColor={globalIndex === selectedIndex ? 'cyan' : undefined}
-                        >
-                          {globalIndex + 1}. {isExpanded ? result.payload?.filePath : truncateText(result.payload?.filePath?.split('/').pop() || 'Unknown', 15)} {result.score.toFixed(2)} | L{result.payload?.startLine}-{result.payload?.endLine}
-                          {isExpanded ? ' 📖' : ' 📄'}
+            {expandedResults.size > 0 ? (
+              // 只显示展开的那一项
+              Array.from(expandedResults).map(globalIndex => {
+                const result = results[globalIndex];
+                if (!result) return null;
+                return (
+                  <Box
+                    key={`item-${globalIndex}-exp-${forceRefresh}`}
+                    flexGrow={1}
+                    paddingX={1}
+                    borderStyle="single"
+                    borderColor="cyan"
+                  >
+                    <Box flexDirection="column">
+                      <Text color="black" backgroundColor="cyan">
+                        {globalIndex + 1}. {result.payload?.filePath} {result.score.toFixed(2)} | L{result.payload?.startLine}-{result.payload?.endLine} 📖
+                      </Text>
+                      <Box flexDirection="column" paddingLeft={1} key={`content-${globalIndex}-${forceRefresh}`}>
+                        <Text color="yellow">Full Content:</Text>
+                        <Text>
+                          {result.payload?.codeChunk || 'No content available'}
                         </Text>
-                        {isExpanded ? (
-                          <Box flexDirection="column" paddingLeft={1} key={`content-${globalIndex}-${forceRefresh}`}>
-                            <Text color="yellow">Full Content:</Text>
-                            <Text >
-                              {result.payload?.codeChunk || 'No content available'}
-                            </Text>
-                          </Box>
-                        ) : (
+                      </Box>
+                    </Box>
+                  </Box>
+                );
+              })
+            ) : (
+              // 正常网格视图
+              Array.from({ length: Math.ceil(results.slice(currentPage * itemsPerPage, (currentPage + 1) * itemsPerPage).length / columnsCount) }).map((_, rowIndex) => (
+                <Box key={`row-${rowIndex}-${forceRefresh}`} flexDirection="row">
+                  {Array.from({ length: columnsCount }).map((_, colIndex) => {
+                    const itemIndex = rowIndex * columnsCount + colIndex;
+                    const globalIndex = currentPage * itemsPerPage + itemIndex;
+                    const result = results[globalIndex];
+
+                    if (!result) return <Box key={`empty-${colIndex}-${forceRefresh}`} flexGrow={1} />;
+
+                    return (
+                      <Box
+                        key={`item-${globalIndex}-col-${forceRefresh}`}
+                        flexGrow={1}
+                        paddingX={1}
+                        marginRight={colIndex < columnsCount - 1 ? 1 : 0}
+                        borderStyle="single"
+                        borderColor={globalIndex === selectedIndex ? 'cyan' : 'white'}
+                      >
+                        <Box flexDirection="column">
+                          <Text
+                            color={globalIndex === selectedIndex ? 'black' : 'cyan'}
+                            backgroundColor={globalIndex === selectedIndex ? 'cyan' : undefined}
+                          >
+                            {globalIndex + 1}. {truncateText(result.payload?.filePath?.split('/').pop() || 'Unknown', 15)} {result.score.toFixed(2)} | L{result.payload?.startLine}-{result.payload?.endLine} 📄
+                          </Text>
                           <Text dimColor key={`preview-${globalIndex}-${forceRefresh}`}>
                             {truncateToSingleLine(result.payload?.codeChunk || '', 60)}
                           </Text>
-                        )}
+                        </Box>
                       </Box>
-                    </Box>
-                  );
-                })}
-              </Box>
-            ))}
+                    );
+                  })}
+                </Box>
+              ))
+            )}
           </Box>
+
 
           {results.length > itemsPerPage && (
             <Box marginTop={1}>
