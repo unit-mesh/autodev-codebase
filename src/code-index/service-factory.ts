@@ -4,7 +4,7 @@ import { OpenAICompatibleEmbedder } from "./embedders/openai-compatible"
 import { EmbedderProvider, getDefaultModelId, getModelDimension } from "../shared/embeddingModels"
 import { QdrantVectorStore } from "./vector-store/qdrant-client"
 import { codeParser, DirectoryScanner, FileWatcher } from "./processors"
-import { ICodeParser, IEmbedder, IFileWatcher, IVectorStore } from "./interfaces"
+import { ICodeParser, IEmbedder, ICodeFileWatcher, IVectorStore } from "./interfaces"
 import { CodeIndexConfigManager } from "./config-manager"
 import { CacheManager } from "./cache-manager"
 import { Ignore } from "ignore"
@@ -162,7 +162,7 @@ export class CodeIndexServiceFactory {
 		vectorStore: IVectorStore,
 		cacheManager: CacheManager,
 		ignoreInstance: Ignore,
-	): IFileWatcher {
+	): ICodeFileWatcher {
 		return new FileWatcher(this.workspacePath, fileSystem, eventBus, cacheManager, embedder, vectorStore, ignoreInstance)
 	}
 
@@ -182,7 +182,7 @@ export class CodeIndexServiceFactory {
 		vectorStore: IVectorStore
 		parser: ICodeParser
 		scanner: DirectoryScanner
-		fileWatcher: IFileWatcher
+		fileWatcher: ICodeFileWatcher
 	} {
 		if (!this.configManager.isFeatureConfigured) {
 			throw new Error("Cannot create services: Code indexing is not properly configured")

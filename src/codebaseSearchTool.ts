@@ -87,7 +87,9 @@ export async function codebaseSearchTool(
 
 	if (directoryPrefix) {
 		directoryPrefix = removeClosingTag("path", directoryPrefix)
-		directoryPrefix = path.normalize(directoryPrefix)
+		if (directoryPrefix) {
+			directoryPrefix = path.normalize(directoryPrefix)
+		}
 	}
 
 	const sharedMessageProps = {

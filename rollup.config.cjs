@@ -77,6 +77,16 @@ function copyFilesPlugin() {
         console.warn(`[copyWasms] tree-sitter source directory not found at ${treeSitterSrcDir}`)
       }
 
+      // Copy core tree-sitter.wasm file from node_modules to dist root
+      const coreWasmSrc = path.join(nodeModulesDir, "web-tree-sitter", "tree-sitter.wasm")
+      if (fs.existsSync(coreWasmSrc)) {
+        const coreWasmDest = path.join(distDir, "tree-sitter.wasm")
+        fs.copyFileSync(coreWasmSrc, coreWasmDest)
+        console.log(`[copyWasms] Copied core tree-sitter.wasm to ${coreWasmDest}`)
+      } else {
+        console.warn(`[copyWasms] Core tree-sitter.wasm not found at ${coreWasmSrc}`)
+      }
+
     }
   };
 }

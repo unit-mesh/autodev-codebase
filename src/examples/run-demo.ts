@@ -47,18 +47,18 @@ async function main() {
     }
   })
 
-  dependencies.logger.info('[run-demo]🚀 Starting Autodev Codebase Demo')
-  dependencies.logger.info('[run-demo]📁 Demo folder:', DEMO_FOLDER)
-  dependencies.logger.info('[run-demo]🤖 Ollama URL:', OLLAMA_BASE_URL)
-  dependencies.logger.info('[run-demo]🔍 Qdrant URL:', QDRANT_URL)
-  dependencies.logger.info('[run-demo]📊 Embedding Model:', OLLAMA_MODEL)
-  dependencies.logger.info('[run-demo]' + '=' .repeat(50))
+  dependencies.logger?.info('[run-demo]🚀 Starting Autodev Codebase Demo')
+  dependencies.logger?.info('[run-demo]📁 Demo folder:', DEMO_FOLDER)
+  dependencies.logger?.info('[run-demo]🤖 Ollama URL:', OLLAMA_BASE_URL)
+  dependencies.logger?.info('[run-demo]🔍 Qdrant URL:', QDRANT_URL)
+  dependencies.logger?.info('[run-demo]📊 Embedding Model:', OLLAMA_MODEL)
+  dependencies.logger?.info('[run-demo]' + '=' .repeat(50))
 
   try {
     // 2. Check if demo folder exists, create if not
     const demoFolderExists = await dependencies.fileSystem.exists(DEMO_FOLDER)
     if (!demoFolderExists) {
-      dependencies.logger.info('[run-demo]📁 Creating demo folder...')
+      dependencies.logger?.info('[run-demo]📁 Creating demo folder...')
       // Create directory using Node.js mkdir since IFileSystem doesn't have createDirectory
       const fs = require('fs')
       fs.mkdirSync(DEMO_FOLDER, { recursive: true })
@@ -68,25 +68,25 @@ async function main() {
     }
 
     // 3. Initialize configuration
-    dependencies.logger.info('[run-demo]⚙️ 加载配置...')
+    dependencies.logger?.info('[run-demo]⚙️ 加载配置...')
     const config = await dependencies.configProvider.loadConfig()
-    dependencies.logger.info('[run-demo]📝 配置内容:', JSON.stringify(config, null, 2))
+    dependencies.logger?.info('[run-demo]📝 配置内容:', JSON.stringify(config, null, 2))
 
     // Validate configuration
-    dependencies.logger.info('[run-demo]✅ 验证配置...')
+    dependencies.logger?.info('[run-demo]✅ 验证配置...')
     const validation = await dependencies.configProvider.validateConfig()
-    dependencies.logger.info('[run-demo]📝 验证结果:', validation)
+    dependencies.logger?.info('[run-demo]📝 验证结果:', validation)
 
     if (!validation.isValid) {
-      dependencies.logger.warn('[run-demo]⚠️ 配置验证警告:', validation.errors)
-      dependencies.logger.info('[run-demo]⚠️ 继续初始化（调试模式）')
+      dependencies.logger?.warn('[run-demo]⚠️ 配置验证警告:', validation.errors)
+      dependencies.logger?.info('[run-demo]⚠️ 继续初始化（调试模式）')
       // 在调试模式下，我们允许配置验证失败但继续初始化
     } else {
-      dependencies.logger.info('[run-demo]✅ 配置验证通过')
+      dependencies.logger?.info('[run-demo]✅ 配置验证通过')
     }
 
     // 4. Create and initialize CodeIndexManager
-    dependencies.logger.info('[run-demo]🏗️ Creating CodeIndexManager with dependencies:', {
+    dependencies.logger?.info('[run-demo]🏗️ Creating CodeIndexManager with dependencies:', {
       hasFileSystem: !!dependencies.fileSystem,
       hasStorage: !!dependencies.storage,
       hasEventBus: !!dependencies.eventBus,
@@ -97,18 +97,18 @@ async function main() {
     })
 
     const codeIndexManager = CodeIndexManager.getInstance(dependencies)
-    dependencies.logger.info('[run-demo]CodeIndexManager instance created:', !!codeIndexManager)
+    dependencies.logger?.info('[run-demo]CodeIndexManager instance created:', !!codeIndexManager)
 
     if (!codeIndexManager) {
-      dependencies.logger.error('[run-demo]❌ Failed to create CodeIndexManager - workspace root path may be invalid')
+      dependencies.logger?.error('[run-demo]❌ Failed to create CodeIndexManager - workspace root path may be invalid')
       return
     }
 
     // 5. Initialize the manager
-    dependencies.logger.info('[run-demo]🔧 初始化 CodeIndexManager...')
+    dependencies.logger?.info('[run-demo]🔧 初始化 CodeIndexManager...')
     const { requiresRestart } = await codeIndexManager.initialize()
-    dependencies.logger.info('[run-demo]✅ CodeIndexManager 初始化成功:', { requiresRestart })
-    dependencies.logger.info('[run-demo]📝 管理器状态:', {
+    dependencies.logger?.info('[run-demo]✅ CodeIndexManager 初始化成功:', { requiresRestart })
+    dependencies.logger?.info('[run-demo]📝 管理器状态:', {
       isInitialized: codeIndexManager.isInitialized,
       isFeatureEnabled: codeIndexManager.isFeatureEnabled,
       isFeatureConfigured: codeIndexManager.isFeatureConfigured,
@@ -116,66 +116,66 @@ async function main() {
     })
 
     if (requiresRestart) {
-      dependencies.logger.info('[run-demo]🔄 Manager restart required')
+      dependencies.logger?.info('[run-demo]🔄 Manager restart required')
     }
 
     // 6. Start monitoring for progress updates
-    dependencies.logger.info('[run-demo]👀 Setting up progress monitoring...')
+    dependencies.logger?.info('[run-demo]👀 Setting up progress monitoring...')
     const unsubscribeProgress = codeIndexManager.onProgressUpdate((progress) => {
-      dependencies.logger.info(`[run-demo]📊 Progress: ${progress.systemStatus} - ${progress.message}`)
+      dependencies.logger?.info(`[run-demo]📊 Progress: ${progress.systemStatus} - ${progress.message}`)
     })
 
     // 7. Start indexing
-    dependencies.logger.info('[run-demo]🚀 Starting code indexing...')
+    dependencies.logger?.info('[run-demo]🚀 Starting code indexing...')
     
     // 设置进度监控
     codeIndexManager.onProgressUpdate((progressInfo) => {
-      dependencies.logger.info('[run-demo]📊 索引进度:', progressInfo)
+      dependencies.logger?.info('[run-demo]📊 索引进度:', progressInfo)
     })
 
     // 添加超时保护
     const indexingTimeout = setTimeout(() => {
-      dependencies.logger.warn('[run-demo]⚠️ 索引进程超时（30秒），可能卡住了')
+      dependencies.logger?.warn('[run-demo]⚠️ 索引进程超时（30秒），可能卡住了')
     }, 30000)
 
     try {
       await codeIndexManager.startIndexing()
       clearTimeout(indexingTimeout)
-      dependencies.logger.info('[run-demo]✅ 索引完成')
+      dependencies.logger?.info('[run-demo]✅ 索引完成')
     } catch (err: any) {
       clearTimeout(indexingTimeout)
-      dependencies.logger.error('[run-demo]❌ 索引失败:', err)
-      dependencies.logger.error('[run-demo]❌ 错误堆栈:', err.stack)
+      dependencies.logger?.error('[run-demo]❌ 索引失败:', err)
+      dependencies.logger?.error('[run-demo]❌ 错误堆栈:', err.stack)
       throw err
     }
 
     // 8. Wait for indexing to complete
-    dependencies.logger.info('[run-demo]⏳ Waiting for indexing to complete...')
+    dependencies.logger?.info('[run-demo]⏳ Waiting for indexing to complete...')
     await waitForIndexingToComplete(codeIndexManager, dependencies.logger)
 
     // 9. Demonstrate search functionality
-    dependencies.logger.info('[run-demo]🔍 Testing search functionality...')
+    dependencies.logger?.info('[run-demo]🔍 Testing search functionality...')
     await demonstrateSearch(codeIndexManager, dependencies.logger)
 
     // 10. Show final status
-    dependencies.logger.info('[run-demo]📈 Final Status Check...')
+    dependencies.logger?.info('[run-demo]📈 Final Status Check...')
     const finalStatus = codeIndexManager.getCurrentStatus()
-    dependencies.logger.info(`[run-demo]📊 System Status: ${finalStatus.systemStatus}`)
-    dependencies.logger.info(`[run-demo]📦 Status Message: ${finalStatus.message}`)
-    dependencies.logger.info(`[run-demo]🕒 Last Update: ${new Date().toLocaleTimeString()}`)
+    dependencies.logger?.info(`[run-demo]📊 System Status: ${finalStatus.systemStatus}`)
+    dependencies.logger?.info(`[run-demo]📦 Status Message: ${finalStatus.message}`)
+    dependencies.logger?.info(`[run-demo]🕒 Last Update: ${new Date().toLocaleTimeString()}`)
 
     // Clean up
-    dependencies.logger.info('[run-demo]🧹 Cleaning up...')
+    dependencies.logger?.info('[run-demo]🧹 Cleaning up...')
     unsubscribeProgress()
     codeIndexManager.dispose()
 
-    dependencies.logger.info('[run-demo]✅ Demo completed successfully!')
-    dependencies.logger.info('[run-demo]Note: The codebase indexing system is working correctly.')
-    dependencies.logger.info('[run-demo]For live file monitoring, the demo can be extended to run continuously.')
+    dependencies.logger?.info('[run-demo]✅ Demo completed successfully!')
+    dependencies.logger?.info('[run-demo]Note: The codebase indexing system is working correctly.')
+    dependencies.logger?.info('[run-demo]For live file monitoring, the demo can be extended to run continuously.')
 
   } catch (error: any) {
-    dependencies.logger.error('[run-demo]❌ Error in demo:', error)
-    dependencies.logger.error('[run-demo]❌ 错误堆栈:', error.stack)
+    dependencies.logger?.error('[run-demo]❌ Error in demo:', error)
+    dependencies.logger?.error('[run-demo]❌ 错误堆栈:', error.stack)
     process.exit(1)
   }
 }

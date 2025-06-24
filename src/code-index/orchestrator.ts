@@ -1,7 +1,7 @@
 import * as path from "path"
 import { CodeIndexConfigManager } from "./config-manager"
 import { CodeIndexStateManager, IndexingState } from "./state-manager"
-import { IFileWatcher, IVectorStore, BatchProcessingSummary } from "./interfaces"
+import { ICodeFileWatcher, IVectorStore, BatchProcessingSummary } from "./interfaces"
 import { DirectoryScanner } from "./processors"
 import { CacheManager } from "./cache-manager"
 import { ILogger } from "../abstractions"
@@ -20,7 +20,7 @@ export class CodeIndexOrchestrator {
 		private readonly cacheManager: CacheManager,
 		private readonly vectorStore: IVectorStore,
 		private readonly scanner: DirectoryScanner,
-		private readonly fileWatcher: IFileWatcher,
+		private readonly fileWatcher: ICodeFileWatcher,
 		private readonly logger?: ILogger,
 	) {}
 

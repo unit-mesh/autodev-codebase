@@ -23,8 +23,8 @@ async function testParserLoading() {
       })
     }
   } catch (error) {
-    console.error('❌ Error loading parsers:', error.message)
-    console.error('Stack:', error.stack)
+    console.error('❌ Error loading parsers:', error instanceof Error ? error.message : String(error))
+    console.error('Stack:', error instanceof Error ? error.stack : 'No stack trace available')
   }
 }
 

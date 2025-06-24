@@ -39,13 +39,13 @@ async function testFullParsing() {
           console.log(`   📝 First block:`, result[0])
         }
       } catch (error) {
-        console.error(`   ❌ Error parsing ${filePath}:`, error.message)
+        console.error(`   ❌ Error parsing ${filePath}:`, error instanceof Error ? error.message : String(error))
       }
     }
     
   } catch (error) {
-    console.error('❌ Test failed:', error.message)
-    console.error('Stack:', error.stack)
+    console.error('❌ Test failed:', error instanceof Error ? error.message : String(error))
+    console.error('Stack:', error instanceof Error ? error.stack : 'No stack trace available')
   }
 }
 

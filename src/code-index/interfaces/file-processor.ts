@@ -47,9 +47,9 @@ export interface IDirectoryScanner {
 }
 
 /**
- * Interface for file watcher
+ * Interface for code file processor watcher
  */
-export interface IFileWatcher {
+export interface ICodeFileWatcher {
 	/**
 	 * Initializes the file watcher
 	 */

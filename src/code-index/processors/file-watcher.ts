@@ -13,7 +13,7 @@ import { v5 as uuidv5 } from "uuid"
 import { Ignore } from "ignore"
 import { scannerExtensions } from "../shared/supported-extensions"
 import {
-	IFileWatcher,
+	ICodeFileWatcher,
 	FileProcessingResult,
 	IEmbedder,
 	IVectorStore,
@@ -29,7 +29,7 @@ import { IEventBus, IFileSystem } from "../../abstractions/core"
 /**
  * Implementation of the file watcher interface
  */
-export class FileWatcher implements IFileWatcher {
+export class FileWatcher implements ICodeFileWatcher {
 	private ignoreInstance?: Ignore
 	private fileWatcher?: fs.FSWatcher
 	private ignoreController: RooIgnoreController
