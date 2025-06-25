@@ -65,7 +65,7 @@ async function main() {
       fs.mkdirSync(DEMO_FOLDER, { recursive: true })
 
       // Create some sample files for demonstration
-      await createSampleFiles(dependencies.fileSystem, DEMO_FOLDER, dependencies.logger)
+      await createSampleFiles(dependencies.fileSystem, DEMO_FOLDER)
     }
 
     // 3. Initialize configuration

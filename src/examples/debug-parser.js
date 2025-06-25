@@ -1,4 +1,4 @@
-import { loadRequiredLanguageParsers } from './dist/index.js';
+import { loadRequiredLanguageParsers } from '../../dist/index.js';
 
 async function test() {
   console.log('Testing parser loading...');

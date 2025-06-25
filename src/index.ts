@@ -13,14 +13,20 @@ export async function main() {
 
   // console.log('CLI options: ', options);
   
-  // Dynamic import to avoid loading TUI dependencies for library usage
-  const { createTUIApp } = await import('./cli/tui-runner');
-  const TUIApp = createTUIApp(options);
+  if (options.mcpServer) {
+    // Pure MCP server mode - no TUI interaction to avoid stdin conflicts
+    const { startMCPServerMode } = await import('./cli/tui-runner');
+    await startMCPServerMode(options);
+  } else {
+    // Traditional TUI-only mode
+    const { createTUIApp } = await import('./cli/tui-runner');
+    const TUIApp = createTUIApp(options);
 
-  render(React.createElement(TUIApp), {
-    patchConsole: true, 
-    debug: false
-  });
+    render(React.createElement(TUIApp), {
+      patchConsole: true, 
+      debug: false
+    });
+  }
 }
 if (process.argv[1] && process.argv[1].endsWith('index.ts')) {
      main();

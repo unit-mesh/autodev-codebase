@@ -9,6 +9,7 @@ export interface CliOptions {
   cache?: string;
   logLevel: 'error' | 'warn' | 'info' | 'debug';
   help: boolean;
+  mcpServer: boolean;
 }
 
 export function parseArgs(argv: string[] = process.argv): CliOptions {
@@ -21,7 +22,8 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
     qdrantUrl: 'http://localhost:6333',
     model: 'nomic-embed-text',
     logLevel: 'error',
-    help: false
+    help: false,
+    mcpServer: false
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -31,6 +33,8 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
       options.help = true;
     } else if (arg === '--demo') {
       options.demo = true;
+    } else if (arg === '--mcp-server') {
+      options.mcpServer = true;
     } else if (arg.startsWith('--path=')) {
       options.path = arg.split('=')[1];
     } else if (arg.startsWith('--ollama-url=')) {
@@ -65,6 +69,7 @@ Usage:
 Options:
   --path=<path>           Workspace path (default: current directory)
   --demo                  Create demo files in workspace
+  --mcp-server            Enable MCP server mode (for IDE integration)
 
   --ollama-url=<url>      Ollama API URL (default: http://localhost:11434)
   --qdrant-url=<url>      Qdrant vector DB URL (default: http://localhost:6333)
@@ -81,5 +86,6 @@ Examples:
   autodev-codebase --path=/my/project
   autodev-codebase --demo --log-level=info
   autodev-codebase --path=/workspace --ollama-url=http://remote:11434
+  autodev-codebase --path=/workspace --mcp-server
 `);
 }

@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # Codebase Library - Development Context
 
 ## Project Overview
@@ -29,7 +33,7 @@ Core Library        (Platform-agnostic business logic)
 
 ### Platform Adapters
 - **VSCode Adapters** (`src/adapters/vscode/`) - VSCode API implementations
-- **Node.js Adapters** (`src/examples/nodejs-usage.ts`) - Node.js implementations
+- **Node.js Adapters** (`src/adapters/nodejs/`) - Node.js platform implementations
 
 ## Core Components
 
@@ -44,6 +48,7 @@ Core Library        (Platform-agnostic business logic)
 - **Tree-sitter Parser** (`src/tree-sitter/`) - Code parsing and definition extraction
 - **Glob File Listing** (`src/glob/list-files.ts`) - Pattern-based file discovery
 - **Search Tools** (`src/codebaseSearchTool.ts`) - Advanced code search capabilities
+- **CLI System** (`src/cli/`) - Command-line interface with Terminal UI
 
 ## Development Guidelines
 
@@ -78,10 +83,34 @@ const manager = new CodeIndexManager({
 
 ### Node.js Usage
 ```typescript
-import { createNodeJSCodebase } from '@autodev/codebase/examples/nodejs-usage'
+import { createNodeDependencies } from '@autodev/codebase/adapters/nodejs'
+import { CodeIndexManager } from '@autodev/codebase'
 
-const codebase = createNodeJSCodebase('/path/to/project')
-await codebase.initialize()
+const deps = createNodeDependencies({ 
+  workspacePath: '/path/to/project',
+  storageOptions: { /* ... */ },
+  loggerOptions: { /* ... */ },
+  configOptions: { /* ... */ }
+})
+
+const manager = CodeIndexManager.getInstance(deps)
+await manager.initialize()
+await manager.startIndexing()
+```
+
+### CLI Usage
+```bash
+# Run interactive TUI with demo
+npm run demo-tui
+
+# Run development mode with demo files
+npm run dev
+
+# Custom configuration (if using as binary)
+npx codebase /path/to/project \
+  --model "nomic-embed-text" \
+  --ollama-url "http://localhost:11434" \
+  --qdrant-url "http://localhost:6333"
 ```
 
 
@@ -91,15 +120,28 @@ await codebase.initialize()
 - `src/abstractions/index.ts` - Core interface definitions
 - `src/code-index/manager.ts` - Primary API entry point
 - `src/adapters/vscode/index.ts` - VSCode integration layer
+- `src/adapters/nodejs/index.ts` - Node.js platform adapters
+- `src/cli.ts` - CLI entry point with environment polyfills
+- `src/cli/tui-runner.ts` - Terminal UI application implementation
 - `examples/nodejs-usage.ts` - Node.js integration examples
 
 ## Commands
 
 ### Development
-- `npm run dev` - Watch mode development
-- `npm run build` - Production build
+- `npm run dev` - Watch mode development (removes cache and runs with demo files)
+- `npm run build` - Production build (creates both ESM and CommonJS outputs)
 - `npm run type-check` - TypeScript validation
-- `npm run test` - Vitest validation, Temporarily not needed
+- `npm run demo-tui` - Run TUI demo application
+
+### CLI Interface
+- **Entry Point**: `src/cli.ts` - Command-line interface launcher with polyfills
+- **TUI Runner**: `src/cli/tui-runner.ts` - Terminal UI application runner  
+- **CLI Features**:
+  - Interactive Terminal UI for code indexing
+  - Full CodeIndexManager initialization with React UI
+  - Demo mode with sample file generation
+  - Configurable storage, cache, and logging
+  - Support for custom models and Qdrant endpoints
 
 
 ## Notes for AI Assistants
@@ -113,105 +155,18 @@ await codebase.initialize()
 
 This codebase demonstrates enterprise-level abstraction patterns and clean architecture principles for creating truly portable JavaScript libraries.
 
-## TUI Debug Experience - CodeIndexManager Initialization Flow
+## Development Notes
 
-### Critical Discovery: React State Synchronization Issues
+### CodeIndexManager Initialization
+1. `createNodeDependencies()` → Creates platform adapters
+2. `CodeIndexManager.getInstance(deps)` → Requires valid `workspace.getRootPath()`
+3. `manager.initialize()` → Initializes internal services
+4. `manager.startIndexing()` → Triggers orchestrator
 
-During debugging of the TUI demo (`src/examples/run-demo-tui.tsx` + `src/examples/tui/App.tsx`), we discovered a critical React state synchronization issue that affects any React-based integration of the CodeIndexManager.
-
-#### Problem Pattern
+### React Integration
+When integrating with React, use `useEffect` to sync prop changes:
 ```typescript
-// ❌ BROKEN: Initial state only
-const [state, setState] = useState({
-  codeIndexManager: initialManager  // Only sets once, never updates
-});
-
-// Later when parent updates codeIndexManager prop...
-// Child component never receives the update!
-```
-
-#### Solution Pattern  
-```typescript
-// ✅ FIXED: Add useEffect to sync prop changes
 useEffect(() => {
   setState(prev => ({ ...prev, codeIndexManager }));
 }, [codeIndexManager]);
 ```
-
-### CodeIndexManager Initialization Call Flow
-
-**Critical Path Discovery:**
-1. `createNodeDependencies()` → Creates platform adapters
-2. `deps.configProvider.loadConfig()` → Loads configuration  
-3. `deps.configProvider.validateConfig()` → **CRITICAL CHECKPOINT**
-4. `CodeIndexManager.getInstance(deps)` → **REQUIRES: workspace.getRootPath()**
-5. `manager.initialize()` → Initializes internal services
-6. `manager.startIndexing()` → Triggers orchestrator
-
-**Key Insight:** Step 4 silently fails if `workspace.getRootPath()` returns `undefined`, causing `getInstance()` to return `undefined` without error logging.
-
-### Indexing Process Debugging Points
-
-**Orchestrator Flow (`src/code-index/orchestrator.ts`):**
-1. `vectorStore.initialize()` - Vector database connection
-2. `cacheManager.clearCacheFile()` - Cache cleanup (if needed)  
-3. `scanner.scanDirectory()` - File discovery and parsing
-4. `_startWatcher()` - File change monitoring setup
-
-**Common Hang Points:**
-- Vector store connection timeout (Qdrant not running)
-- Scanner getting stuck on large directories
-- File watcher initialization failing
-
-### React Component Debug Patterns
-
-**For any React integration with CodeIndexManager:**
-
-```typescript
-// Always add debug logging in child components
-console.log('Component received codeIndexManager:', {
-  exists: !!codeIndexManager,
-  type: typeof codeIndexManager,
-  isInitialized: codeIndexManager?.isInitialized,
-  isFeatureEnabled: codeIndexManager?.isFeatureEnabled,
-  state: codeIndexManager?.state
-});
-
-// Always handle different initialization states
-if (!codeIndexManager) {
-  return <ErrorDisplay message="Manager not provided" />;
-}
-if (!codeIndexManager.isInitialized) {
-  return <ErrorDisplay message="Manager not initialized" details={...} />;
-}
-```
-
-### Configuration Validation Strategy
-
-**Learned Pattern:** Configuration validation should be warning-based for development, not blocking:
-
-```typescript
-// ❌ Blocks development when services are down
-if (!validation.isValid) {
-  throw new Error(`Validation failed: ${errors}`);
-}
-
-// ✅ Allows development with warnings
-if (!validation.isValid) {
-  console.warn('Config validation warnings:', errors);
-  // Continue with reduced functionality
-}
-```
-
-### Debugging Commands for Future Reference
-
-```bash
-# Always run type check after React state changes
-npm run type-check
-
-# For TUI debugging, look for these console patterns:
-# "🚀 开始索引进程..." → "✨ 索引进程全部完成!"
-# Any gap indicates hang point in orchestrator
-```
-
-This debugging experience revealed critical React integration patterns that apply to any UI framework integration with CodeIndexManager.
