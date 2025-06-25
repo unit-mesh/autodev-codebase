@@ -8,6 +8,7 @@
 import path from 'path'
 import { createNodeDependencies } from '../adapters/nodejs'
 import { CodeIndexManager } from '../code-index/manager'
+import createSampleFiles from './create-sample-files';
 
 // Configuration
 const DEMO_FOLDER = path.join(process.cwd(), 'demo-simple')
@@ -72,59 +73,6 @@ async function main() {
   }
 }
 
-async function createSampleFiles(fileSystem: any, demoFolder: string) {
-  console.log('📝 Creating sample files...')
-  
-  const sampleFiles = [
-    {
-      path: 'hello.js',
-      content: `// Sample JavaScript file
-function greetUser(name) {
-  console.log(\`Hello, \${name}!\`);
-  return \`Welcome, \${name}\`;
-}
-
-module.exports = { greetUser };
-`
-    },
-    {
-      path: 'utils.py',
-      content: `"""
-Utility functions for data processing
-"""
-
-def process_data(data):
-    """Process input data and return cleaned version"""
-    if not data:
-        return []
-    
-    # Clean and filter data
-    cleaned = [item.strip() for item in data if item.strip()]
-    return cleaned
-`
-    },
-    {
-      path: 'README.md',
-      content: `# Simple Demo Project
-
-This is a sample project for demonstrating the Autodev Codebase library.
-
-## Files
-
-- \`hello.js\` - JavaScript utility functions
-- \`utils.py\` - Python data processing utilities
-- \`README.md\` - This documentation
-`
-    }
-  ]
-
-  for (const file of sampleFiles) {
-    const filePath = path.join(demoFolder, file.path)
-    const content = new TextEncoder().encode(file.content)
-    await fileSystem.writeFile(filePath, content)
-    console.log(`  ✅ Created: ${file.path}`)
-  }
-}
 
 async function demonstrateFileSystem(fileSystem: any, demoFolder: string) {
   console.log('📖 Reading sample files...')

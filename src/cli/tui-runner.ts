@@ -6,34 +6,10 @@ import { createNodeDependencies } from '../adapters/nodejs';
 import { CodeIndexManager } from '../code-index/manager';
 import { App } from '../examples/tui/App';
 import { CliOptions } from './args-parser';
+import createSampleFiles from '../examples/create-sample-files';
 
 // Extract sample files creation from original demo
-async function createSampleFiles(fileSystem: any, demoFolder: string) {
-  const sampleFiles = [
-    {
-      path: 'hello.js',
-      content: '// Sample JavaScript file\nfunction greetUser(name) {\n  console.log(`Hello, ${name}!`);\n  return `Welcome, ${name}`;\n}\n\nclass UserManager {\n  constructor() {\n    this.users = [];\n  }\n\n  addUser(user) {\n    this.users.push(user);\n    console.log(\'User added:\', user.name);\n  }\n\n  getUsers() {\n    return this.users;\n  }\n}\n\nmodule.exports = { greetUser, UserManager };\n'
-    },
-    {
-      path: 'utils.py',
-      content: '"""\nUtility functions for data processing\n"""\n\ndef process_data(data):\n    """Process input data and return cleaned version"""\n    if not data:\n        return []\n\n    # Clean and filter data\n    cleaned = [item.strip() for item in data if item.strip()]\n    return cleaned\n\nclass DataProcessor:\n    def __init__(self, config=None):\n        self.config = config or {}\n        self.processed_count = 0\n\n    def process_batch(self, batch):\n        """Process a batch of data items"""\n        results = []\n        for item in batch:\n            processed = self._process_item(item)\n            results.append(processed)\n            self.processed_count += 1\n        return results\n\n    def _process_item(self, item):\n        """Process individual item"""\n        # Apply transformations\n        return item.upper() if isinstance(item, str) else item\n'
-    },
-    {
-      path: 'README.md',
-      content: '# Demo Project\n\nThis is a sample project for demonstrating the Autodev Codebase indexing system.\n\n## Features\n\n- JavaScript utilities\n- Python data processing\n- Markdown documentation\n- Automated code indexing\n\n## Usage\n\nThe system will automatically index all files in this directory and provide semantic search capabilities.\n\n### JavaScript Functions\n\n- `greetUser(name)` - Greets a user by name\n- `UserManager` - Class for managing user data\n\n### Python Functions\n\n- `process_data(data)` - Cleans and processes input data\n- `DataProcessor` - Class for batch data processing\n\n## Search Examples\n\nTry searching for:\n- "greet user"\n- "process data"\n- "user management"\n- "batch processing"\n'
-    },
-    {
-      path: 'config.json',
-      content: '{\n  "app_name": "Demo Application",\n  "version": "1.0.0",\n  "settings": {\n    "debug": true,\n    "max_users": 1000,\n    "data_processing": {\n      "batch_size": 100,\n      "timeout": 30000\n    }\n  },\n  "features": {\n    "user_management": true,\n    "data_processing": true,\n    "search": true\n  }\n}\n'
-    }
-  ];
 
-  for (const file of sampleFiles) {
-    const filePath = path.join(demoFolder, file.path);
-    const content = new TextEncoder().encode(file.content);
-    await fileSystem.writeFile(filePath, content);
-  }
-}
 
 export function createTUIApp(options: CliOptions) {
   const AppWithOptions: React.FC = () => {
@@ -53,7 +29,7 @@ export function createTUIApp(options: CliOptions) {
         const workspacePath = options.demo
           ? path.join(resolvedPath, 'demo')
           : resolvedPath;
-        console.log('[tui-runner]📂 Workspace path:', workspacePath);
+        // console.log('[tui-runner]📂 Workspace path:', workspacePath);
         const deps = createNodeDependencies({
           workspacePath,
           storageOptions: {
@@ -200,7 +176,7 @@ export function createTUIApp(options: CliOptions) {
         React.createElement(Text, { color: "gray" }, "Please check configuration or service connection status")
       );
     }
-
+    const DummyApp = () => null;
     return React.createElement(App, { codeIndexManager, dependencies });
   };
 

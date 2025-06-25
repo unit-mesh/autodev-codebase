@@ -11,14 +11,14 @@ export async function main() {
     process.exit(0);
   }
 
-  console.log('CLI options: ', options);
+  // console.log('CLI options: ', options);
   
   // Dynamic import to avoid loading TUI dependencies for library usage
   const { createTUIApp } = await import('./cli/tui-runner');
   const TUIApp = createTUIApp(options);
 
   render(React.createElement(TUIApp), {
-    patchConsole: false,  // 临时禁用以查看 console.log
+    patchConsole: true, 
     debug: false
   });
 }

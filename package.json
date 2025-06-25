@@ -3,13 +3,13 @@
   "version": "0.0.1",
   "type": "module",
   "bin": {
-    "autodev-codebase": "./dist/cli.js"
+    "codebase": "./dist/cli.js"
   },
   "files": [
     "dist/**/*"
   ],
   "scripts": {
-    "dev": "npx tsx src/index.ts --demo",
+    "dev": "rm -rf .autodev-cache/ && npx tsx src/index.ts --demo",
     "build": "rollup -c rollup.config.cjs",
     "type-check": "npx tsc -p tsconfig.cli.json --noEmit",
     "demo-tui": "npx tsx src/examples/run-demo-tui.tsx"

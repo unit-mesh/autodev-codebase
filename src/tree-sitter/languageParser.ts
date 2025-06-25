@@ -66,23 +66,14 @@ function findWasmFile(langName: string): string {
 		// 1. 当前模块目录（开发环境，WASM 文件被复制到这里）
 		path.join(basePath, fileName),
 		// 2. 打包后的情况：相对于 dist/index.js 找到 dist/tree-sitter/
-		path.join(basePath, 'tree-sitter', fileName),
-		// 3. 打包后的 dist 目录（与当前模块同级）
-		path.join(basePath, '..', fileName),
-		// 4. 打包后的根 dist 目录
-		path.join(basePath, '..', '..', fileName),
-		// 5. 项目根目录
-		path.join(process.cwd(), fileName),
-		// 6. 源码目录（开发环境备选）
-		path.join(process.cwd(), 'src', 'tree-sitter', fileName),
-		// 7. node_modules 中的文件（开发环境，直接访问）
-		path.join(process.cwd(), 'node_modules', 'tree-sitter-wasms', 'out', fileName),
+		path.join(basePath, 'tree-sitter', fileName)
 	]
 	
 	// 逐个检查文件是否存在
-	for (const filePath of possiblePaths) {
+	for (const [index, filePath] of possiblePaths.entries()) {
 		try {
 			if (fs.existsSync(filePath)) {
+				// console.log(`Found WASM file for ${langName} at: ${filePath}, filePath: ${filePath}, index: ${index}`)
 				return filePath
 			}
 		} catch (error) {
@@ -143,7 +134,7 @@ function findCoreTreeSitterWasm(): string {
 	for (const filePath of possiblePaths) {
 		try {
 			if (fs.existsSync(filePath)) {
-				console.log(`Found core tree-sitter WASM file at: ${filePath}`)
+				// console.log(`Found core tree-sitter WASM file at: ${filePath}`)
 				return filePath
 			}
 		} catch (error) {
@@ -175,10 +166,23 @@ async function loadLanguage(langName: string) {
 }
 
 let isParserInitialized = false
+let initializationPromise: Promise<void> | null = null
 
 async function initializeParser() {
-	console.log("🌲 Initializing tree-sitter parser...\n")
-	if (!isParserInitialized) {
+	// If already initialized, return immediately
+	if (isParserInitialized) {
+		return
+	}
+	
+	// If initialization is in progress, wait for it to complete
+	if (initializationPromise) {
+		await initializationPromise
+		return
+	}
+	
+	// Start initialization
+	initializationPromise = (async () => {
+		// console.log("🌲 Initializing tree-sitter parser...\n")
 		// 动态查找核心 tree-sitter.wasm 文件路径
 		const wasmPath = findCoreTreeSitterWasm()
 		await Parser.init({
@@ -190,7 +194,10 @@ async function initializeParser() {
 			}
 		})
 		isParserInitialized = true
-	}
+	})()
+	
+	await initializationPromise
+	initializationPromise = null
 }
 
 /*
@@ -218,6 +225,7 @@ Sources:
 export async function loadRequiredLanguageParsers(filesToParse: string[]): Promise<LanguageParser> {
 	await initializeParser()
 	const extensionsToLoad = new Set(filesToParse.map((file) => path.extname(file).toLowerCase().slice(1)))
+	// console.log(`📝 Loading parsers for files: ${filesToParse.join(', ')} -> extensions: ${Array.from(extensionsToLoad).join(', ')}`)
 	const parsers: LanguageParser = {}
 	for (const ext of Array.from(extensionsToLoad)) {
 		try {
