@@ -103,6 +103,10 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       if (key.escape) {
         setShowFilters(false);
         setTempFilterValue('');
+        // Re-apply filters to existing results if we have any
+        if (results.length > 0 && query.trim()) {
+          await performSearch();
+       } 
         return;
       }
 
@@ -147,10 +151,6 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
           setFilters(prev => ({ ...prev, pathPattern: tempFilterValue.trim() }));
         }
         setTempFilterValue('');
-        // Re-apply filters to existing results if we have any
-        if (results.length > 0 && query.trim()) {
-          await performSearch();
-        }
         return;
       }
 
@@ -574,17 +574,21 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
                         flexGrow={1}
                         paddingX={1}
                         marginRight={colIndex < columnsCount - 1 ? 1 : 0}
-                        borderStyle="single"
+                        borderStyle={globalIndex === selectedIndex ? "double" : "single"}
                         borderColor={globalIndex === selectedIndex ? 'cyan' : 'white'}
                       >
                         <Box flexDirection="column">
                           <Text
                             color={globalIndex === selectedIndex ? 'black' : 'cyan'}
                             backgroundColor={globalIndex === selectedIndex ? 'cyan' : undefined}
+                            bold={globalIndex === selectedIndex}
                           >
                             {globalIndex + 1}. {truncateText(result.payload?.filePath?.split('/').pop() || 'Unknown', 15)} {result.score.toFixed(2)} | L{result.payload?.startLine}-{result.payload?.endLine} 📄
                           </Text>
-                          <Text dimColor key={`preview-${globalIndex}-${forceRefresh}`}>
+                          <Text
+                            dimColor
+                            key={`preview-${globalIndex}-${forceRefresh}`}
+                          >
                             {truncateToSingleLine(result.payload?.codeChunk || '', 60)}
                           </Text>
                         </Box>

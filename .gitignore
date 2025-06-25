@@ -46,3 +46,5 @@ pnpm-debug.log*
 *.wasm
 /demo
 /.autodev-cache
+/.rollup.cache
+/.repoproject

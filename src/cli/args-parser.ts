@@ -52,7 +52,6 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
       }
     }
   }
-
   return options;
 }
 

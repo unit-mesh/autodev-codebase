@@ -7,13 +7,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const indexPath = path.join(__dirname, 'index.js');
 
 // Build the command with polyfills
+const cliArgs = process.argv.slice(2);
 const command = `
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 global.self = global;
 global.window = global;
 global.document = { createElement: () => ({}), addEventListener: () => {}, removeEventListener: () => {} };
-global.navigator = { userAgent: 'Node.js' };
+// Fix for Ink color detection - provide proper navigator object for Node.js
+global.navigator = {
+  userAgent: 'Node.js',
+  userAgentData: {
+    brands: [{ brand: 'Chromium', version: '100' }]
+  }
+};
 global.HTMLElement = class HTMLElement {};
 global.Element = class Element {};
 global.addEventListener = () => {};
@@ -23,7 +30,8 @@ global.__dirname = dirname(fileURLToPath(import.meta.url));
 process.env['NODE_ENV'] = process.env['NODE_ENV'] || 'production';
 process.env['REACT_EDITOR'] = 'none';
 process.env['DISABLE_REACT_DEVTOOLS'] = 'true';
-process.argv = [process.argv[0], '${indexPath}', ...process.argv.slice(2)];
+
+process.argv = [process.argv[0], '${indexPath}', ...${JSON.stringify(cliArgs)}];
 await import('${indexPath}').then(({ main }) => main());
 `;
 

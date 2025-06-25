@@ -159,6 +159,7 @@ module.exports = [
       return false;
     },
     plugins: [
+      copyFilesPlugin(),
       json(),
       resolve({
         preferBuiltins: true,

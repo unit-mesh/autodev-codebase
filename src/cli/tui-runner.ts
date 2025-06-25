@@ -53,7 +53,7 @@ export function createTUIApp(options: CliOptions) {
         const workspacePath = options.demo
           ? path.join(resolvedPath, 'demo')
           : resolvedPath;
-
+        console.log('[tui-runner]📂 Workspace path:', workspacePath);
         const deps = createNodeDependencies({
           workspacePath,
           storageOptions: {
