@@ -52,7 +52,7 @@ export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ 
       const nextView = VIEWS[(currentIndex + 1) % VIEWS.length];
       setState(prev => ({ ...prev, currentView: nextView }));
     }
-    if (input === 'q' && key.ctrl) {
+    if (input === 'd' && key.ctrl) {
       process.exit(0);
     }
   });
@@ -77,7 +77,7 @@ export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ 
       <Box borderStyle="double" borderColor="blue" paddingLeft={1}>
         <Text bold color="blue">Autodev Codebase TUI</Text>
         <Box marginLeft={2}>
-          <Text color="gray">Tab: Switch views | Ctrl+Q: Quit</Text>
+          <Text color="gray">Tab: Switch views | Ctrl+D: Quit</Text>
         </Box>
       </Box>
 

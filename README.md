@@ -1,4 +1,14 @@
+
+
 # @autodev/codebase
+
+<div align="center">
+  <img src="src/images/image1.png" width="300" alt="Image 1" style="margin: 0 10px;" />
+  <img src="src/images/image2.png" width="200" alt="Image 2" style="margin: 0 10px;" />
+  <img src="src/images/image3.png" height="150" alt="Image 3" style="margin: 0 10px;" />
+</div>
+
+<br />
 
 A platform-agnostic code analysis library with semantic search capabilities and MCP (Model Context Protocol) server support. This library provides intelligent code indexing, vector-based semantic search, and can be integrated into various development tools and IDEs.
 

@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "dev": "rm -rf .autodev-cache/ && npx tsx src/index.ts --demo",
-    "build": "rollup -c rollup.config.cjs",
+    "build": "rollup -c rollup.config.cjs && chmod +x dist/cli.js",
     "type-check": "npx tsc -p tsconfig.cli.json --noEmit",
     "demo-tui": "npx tsx src/examples/run-demo-tui.tsx",
     "mcp-server": "npx tsx src/index.ts mcp-server --demo --port=3002"
@@ -42,6 +42,7 @@
     "tslib": "^2.7.0",
     "undici-types": "^7.10.0",
     "uuid": "^10.0.0",
+    "vitest": "^3.2.4",
     "web-tree-sitter": "^0.23.0"
   },
   "devDependencies": {
