@@ -23,10 +23,6 @@ A platform-agnostic code analysis library with semantic search capabilities and 
 
 ## 📦 Installation
 
-```bash
-npm install @autodev/codebase
-```
-
 ### 1. Install and Start Ollama
 
 ```bash
@@ -67,7 +63,15 @@ curl http://localhost:11434/api/tags
 # Check Qdrant
 curl http://localhost:6333/collections
 ```
+### 4. Install project locally
 
+```
+git clone https://github.com/anrgct/autodev-codebase
+cd autodev-codebase
+npm install
+npm run build
+npm link
+```
 ## 🛠️ Usage
 
 ### Command Line Interface
