@@ -10,6 +10,8 @@ export interface CliOptions {
   logLevel: 'error' | 'warn' | 'info' | 'debug';
   help: boolean;
   mcpServer: boolean;
+  mcpPort?: number; // Port for HTTP MCP server
+  mcpHost?: string; // Host for HTTP MCP server
 }
 
 export function parseArgs(argv: string[] = process.argv): CliOptions {
@@ -26,6 +28,13 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
     mcpServer: false
   };
 
+  // Check for MCP server command (positional argument)
+  if (args[0] === 'mcp-server') {
+    options.mcpServer = true;
+    // Remove the command from args to process remaining options
+    args.shift();
+  }
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
 
@@ -37,6 +46,13 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
       options.mcpServer = true;
     } else if (arg.startsWith('--path=')) {
       options.path = arg.split('=')[1];
+    } else if (arg.startsWith('--port=')) {
+      const port = parseInt(arg.split('=')[1], 10);
+      if (!isNaN(port)) {
+        options.mcpPort = port;
+      }
+    } else if (arg.startsWith('--host=')) {
+      options.mcpHost = arg.split('=')[1];
     } else if (arg.startsWith('--ollama-url=')) {
       options.ollamaUrl = arg.split('=')[1];
     } else if (arg.startsWith('--qdrant-url=')) {
@@ -64,12 +80,16 @@ export function printHelp() {
 @autodev/codebase - Code Analysis TUI
 
 Usage:
-  autodev-codebase [options]
+  codebase [options]                    Run TUI mode (default)
+  codebase mcp-server [options]         Start MCP server mode
 
 Options:
   --path=<path>           Workspace path (default: current directory)
   --demo                  Create demo files in workspace
-  --mcp-server            Enable MCP server mode (for IDE integration)
+
+MCP Server Options:
+  --port=<port>           HTTP server port (default: 3001)
+  --host=<host>           HTTP server host (default: localhost)
 
   --ollama-url=<url>      Ollama API URL (default: http://localhost:11434)
   --qdrant-url=<url>      Qdrant vector DB URL (default: http://localhost:6333)
@@ -83,9 +103,23 @@ Options:
   --help, -h              Show this help
 
 Examples:
-  autodev-codebase --path=/my/project
-  autodev-codebase --demo --log-level=info
-  autodev-codebase --path=/workspace --ollama-url=http://remote:11434
-  autodev-codebase --path=/workspace --mcp-server
+  # TUI mode
+  codebase --path=/my/project
+  codebase --demo --log-level=info
+
+  # MCP Server mode (long-running)
+  cd /my/project
+  codebase mcp-server                   # Use current directory
+  codebase mcp-server --port=3001       # Custom port
+  codebase mcp-server --path=/workspace # Explicit path
+
+  # Client configuration in IDE (e.g., Cursor):
+  {
+    "mcpServers": {
+      "codebase": {
+        "url": "http://localhost:3001/sse"
+      }
+    }
+  }
 `);
 }

@@ -17,7 +17,7 @@ try {
   vscode = require('vscode')
 } catch (e) {
   // VSCode not available - this is expected in standalone environments
-  console.warn('VSCode not available - search functionality will be limited')
+//   console.warn('VSCode not available - search functionality will be limited')
 }
 
 // Use the proper ripgrep getBinPath implementation

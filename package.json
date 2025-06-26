@@ -12,7 +12,8 @@
     "dev": "rm -rf .autodev-cache/ && npx tsx src/index.ts --demo",
     "build": "rollup -c rollup.config.cjs",
     "type-check": "npx tsc -p tsconfig.cli.json --noEmit",
-    "demo-tui": "npx tsx src/examples/run-demo-tui.tsx"
+    "demo-tui": "npx tsx src/examples/run-demo-tui.tsx",
+    "mcp-server": "npx tsx src/index.ts mcp-server --demo --port=3002"
   },
   "peerDependencies": {
     "vscode": "^1.74.0"

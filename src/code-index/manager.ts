@@ -65,6 +65,10 @@ export class CodeIndexManager implements ICodeIndexManager {
 
 	// --- Public API ---
 
+	public get workspacePathValue(): string {
+		return this.workspacePath
+	}
+
 	public get onProgressUpdate() {
 		return this._stateManager.onProgressUpdate
 	}

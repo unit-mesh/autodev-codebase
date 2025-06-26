@@ -7,7 +7,8 @@ import { CodeIndexManager } from '../code-index/manager';
 import { App } from '../examples/tui/App';
 import { CliOptions } from './args-parser';
 import createSampleFiles from '../examples/create-sample-files';
-import { createMCPServer, CodebaseMCPServer } from '../mcp/server';
+import { CodebaseMCPServer, createMCPServer } from '../mcp/server';
+import { CodebaseHTTPMCPServer } from '../mcp/http-server.js';
 
 // Extract sample files creation from original demo
 
@@ -416,6 +417,18 @@ export function createDualModeApp(options: CliOptions) {
   return DualModeAppWithOptions;
 }
 
+// Helper function to create HTTP MCP server
+async function createHTTPMCPServer(manager: CodeIndexManager, options?: { port?: number; host?: string }): Promise<CodebaseHTTPMCPServer> {
+  const server = new CodebaseHTTPMCPServer({
+    codeIndexManager: manager,
+    port: options?.port,
+    host: options?.host
+  });
+  
+  await server.start();
+  return server;
+}
+
 export async function startMCPServerMode(options: CliOptions): Promise<void> {
   // Ensure options.path is absolute; if not, prepend process.cwd()
   let resolvedPath = options.path;
@@ -496,17 +509,19 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
 
     // Start MCP Server
     console.log('🚀 Starting MCP Server...');
-    const server = await createMCPServer(manager);
+    const server = await createHTTPMCPServer(manager, {
+      port: options.mcpPort,
+      host: options.mcpHost
+    });
     console.log('✅ MCP Server started successfully');
     
     // Display configuration instructions
     console.log('\n🔗 MCP Server is now running!');
-    console.log('Add this configuration to your IDE:');
+    console.log('Configure your IDE to connect to the HTTP MCP server:');
     console.log(JSON.stringify({
       "mcpServers": {
         "codebase": {
-          "command": "codebase",
-          "args": [`--path=${workspacePath}`, "--mcp-server"]
+          "url": `http://${options.mcpHost || 'localhost'}:${options.mcpPort || 3001}/sse`
         }
       }
     }, null, 2));
