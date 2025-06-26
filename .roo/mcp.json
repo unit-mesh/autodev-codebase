@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "codebase": {
+      "url": "http://localhost:3001/sse"
+    }
+  }
+}

@@ -249,13 +249,13 @@ Note: Configuration changes will apply to subsequent searches.
         let transport: SSEServerTransport | undefined;
 
         // Simple SSE endpoint following demo-server pattern exactly
-        app.get('/sse', async (_req, res) => {
+        app.get('/sse', async (_req: Request, res: Response) => {
             transport = new SSEServerTransport('/messages', res);
             await this.mcpServer.connect(transport);
         });
 
         // Message handling endpoint - exactly like demo-server
-        app.post('/messages', async (req, res) => {
+        app.post('/messages', async (req: Request, res: Response) => {
             if (!transport) {
                 res.status(404).send('No transport found');
                 return;
