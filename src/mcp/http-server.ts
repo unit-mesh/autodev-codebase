@@ -49,11 +49,14 @@ export class CodebaseHTTPMCPServer {
                 query: z.string().describe('The search query to find relevant code'),
                 limit: z.number().optional().default(10).describe('Maximum number of results to return (default: 10)'),
                 filters: z.object({
-                    fileTypes: z.array(z.string()).optional().describe('Filter by file extensions (e.g., [".ts", ".js"])'),
-                    pathPatterns: z.array(z.string()).optional().describe('Filter by path patterns (e.g., ["src/", "test/"])')
+                    
+                    pathPatterns: z.array(z.string()).optional().describe('Filter by path patterns (e.g., ["src/", "test/"])'),
+                    minScore: z.number().optional().describe('Minimum similarity score threshold (0-1)'),
+                    directoryPrefix: z.string().optional().describe('Directory path prefix to filter results')
                 }).optional().describe('Optional filters for file types, paths, etc.')
             },
             async ({ query, limit = 10, filters }): Promise<CallToolResult> => {
+                // console.log(`🔍[MCP Server] Handling search_codebase with query: "${query}", limit: ${limit}, filters:`, filters);
                 return await this.handleSearchCodebase({ query, limit, filters });
             }
         );
@@ -104,7 +107,14 @@ export class CodebaseHTTPMCPServer {
         }
 
         try {
-            const searchResults = await this.codeIndexManager.searchIndex(query, Math.min(limit, 50));
+            // Extract search filter from the filters parameter
+            const searchFilter = {
+                limit: Math.min(limit, 50),
+                minScore: filters?.minScore,
+                directoryPrefix: filters?.directoryPrefix,
+                pathPatterns: filters?.pathPatterns
+            };
+            const searchResults = await this.codeIndexManager.searchIndex(query, searchFilter);
 
             if (!searchResults || searchResults.length === 0) {
                 return {
@@ -230,7 +240,6 @@ Note: Configuration changes will apply to subsequent searches.
 
     private setupHTTPServer() {
         const app = express();
-        // Remove express.json() to match demo-server exactly
         
         // Minimal CORS - only if needed
         app.use((req: any, res: any, next: any) => {

@@ -15,12 +15,17 @@ global.self = global;
 global.window = global;
 global.document = { createElement: () => ({}), addEventListener: () => {}, removeEventListener: () => {} };
 // Fix for Ink color detection - provide proper navigator object for Node.js
-global.navigator = {
-  userAgent: 'Node.js',
-  userAgentData: {
-    brands: [{ brand: 'Chromium', version: '100' }]
-  }
-};
+Object.defineProperty(global, 'navigator', {
+  value: {
+    userAgent: 'Node.js',
+    userAgentData: {
+      brands: [{ brand: 'Chromium', version: '100' }]
+    }
+  },
+  writable: true,
+  configurable: true
+});
+
 global.HTMLElement = class HTMLElement {};
 global.Element = class Element {};
 global.addEventListener = () => {};

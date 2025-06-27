@@ -1,4 +1,4 @@
-import { VectorStoreSearchResult } from "./vector-store"
+import { VectorStoreSearchResult, SearchFilter } from "./vector-store"
 import type { IndexingState } from "../state-manager"
 
 // Re-export IndexingState for external use
@@ -55,10 +55,10 @@ export interface ICodeIndexManager {
 	/**
 	 * Searches the index
 	 * @param query Query string
-	 * @param limit Maximum number of results to return
+	 * @param filter Search filter options
 	 * @returns Promise resolving to search results
 	 */
-	searchIndex(query: string, limit: number): Promise<VectorStoreSearchResult[]>
+	searchIndex(query: string, filter?: SearchFilter): Promise<VectorStoreSearchResult[]>
 
 	/**
 	 * Gets the current status of the indexing system

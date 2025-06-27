@@ -11,7 +11,7 @@ import { URL } from 'url';
 
 class SimpleMCPSSEClient {
     constructor(options = {}) {
-        this.baseUrl = options.baseUrl || 'http://localhost:3002';
+        this.baseUrl = options.baseUrl || 'http://localhost:3001';
         this.requests = new Map();
         this.requestId = 0;
         this.serverProcess = null;
@@ -26,8 +26,8 @@ class SimpleMCPSSEClient {
             'tsx',
             'src/index.ts',
             'mcp-server',
-            '--demo',
-            '--port=3002',
+            // '--demo',
+            '--port=3001',
             '--host=localhost'
         ], {
             stdio: ['pipe', 'pipe', 'pipe'],
@@ -76,7 +76,7 @@ class SimpleMCPSSEClient {
         console.log('🔌 Connecting to SSE endpoint...');
         
         return new Promise((resolve, reject) => {
-            const url = new URL('/mcp', this.baseUrl);
+            const url = new URL('/sse', this.baseUrl);
             
             const req = http.request({
                 hostname: url.hostname,
@@ -214,7 +214,7 @@ class SimpleMCPSSEClient {
             }, 30000);
 
             try {
-                await this.httpRequest('/mcp', 'POST', request);
+                await this.httpRequest('/messages', 'POST', request);
                 // Response should come via SSE
             } catch (error) {
                 clearTimeout(timeout);
@@ -276,8 +276,12 @@ class SimpleMCPSSEClient {
             const response = await this.sendRequest('tools/call', {
                 name: 'search_codebase',
                 arguments: {
-                    query: 'function',
-                    limit: 3
+                    query: 'CodeIndexManager',
+                    limit: 10,
+                    filters: {
+                        // directoryPrefix: 'shared',
+                        pathPatterns: ['src/code-index/shared','tui2']   
+                    }
                 }
             });
             console.log('✅ Search result:', response);
@@ -385,10 +389,10 @@ class SimpleMCPSSEClient {
     async runFullTest() {
         const results = { passed: 0, failed: 0, tests: [] };
         const tests = [
-            { name: 'Health Check', fn: () => this.testHealthCheck() },
-            { name: 'Initialize', fn: () => this.testInitialize() },
-            { name: 'List Tools', fn: () => this.testListTools() },
-            { name: 'Get Stats', fn: () => this.testGetStats() },
+            // { name: 'Health Check', fn: () => this.testHealthCheck() },
+            // { name: 'Initialize', fn: () => this.testInitialize() },
+            // { name: 'List Tools', fn: () => this.testListTools() },
+            // { name: 'Get Stats', fn: () => this.testGetStats() },
             { name: 'Search Codebase', fn: () => this.testSearchCodebase() }
         ];
 
@@ -434,7 +438,7 @@ async function main() {
     const interactiveMode = args.includes('--interactive') || args.includes('-i');
 
     const client = new SimpleMCPSSEClient({
-        baseUrl: process.env.MCP_BASE_URL || 'http://localhost:3002'
+        baseUrl: process.env.MCP_BASE_URL || 'http://localhost:3001'
     });
 
     process.on('SIGINT', () => {

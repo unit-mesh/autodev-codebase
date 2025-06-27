@@ -295,8 +295,8 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
       setExpandedResults(new Set());
       setCurrentPage(0);
       // setForceRefresh(prev => prev + 1);
-    } else if (input && input.trim() && !key.ctrl && !key.meta && !key.escape && !key.return) {
-      // Handle character input (including multi-byte characters like Chinese)
+    } else if (input && !key.ctrl && !key.meta && !key.escape && !key.return) {
+      // Handle character input (including spaces and multi-byte characters like Chinese)
       // Remove length check to support Unicode characters that may have length > 1
       const newQuery = query + input;
       setQuery(newQuery);
@@ -312,7 +312,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
     onLog(`🔍 Searching for: "${query}"`);
 
     try {
-      const searchResults = await codeIndexManager.searchIndex(query.trim(), 20);
+      const searchResults = await codeIndexManager.searchIndex(query.trim(), { limit: 20 });
 
       // Apply filters
       let filteredResults = searchResults;

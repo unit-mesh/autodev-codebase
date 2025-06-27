@@ -1,5 +1,5 @@
 import * as path from "path"
-import { VectorStoreSearchResult } from "./interfaces"
+import { VectorStoreSearchResult, SearchFilter } from "./interfaces"
 import { IEmbedder } from "./interfaces/embedder"
 import { IVectorStore } from "./interfaces/vector-store"
 import { CodeIndexConfigManager } from "./config-manager"
@@ -19,24 +19,21 @@ export class CodeIndexSearchService {
 	/**
 	 * Searches the code index for relevant content.
 	 * @param query The search query
-	 * @param limit Maximum number of results to return
-	 * @param directoryPrefix Optional directory path to filter results by
+	 * @param filter Search filter options
 	 * @returns Array of search results
 	 * @throws Error if the service is not properly configured or ready
 	 */
-	public async searchIndex(query: string, limit: number = 10): Promise<VectorStoreSearchResult[]> {
+	public async searchIndex(query: string, filter?: SearchFilter): Promise<VectorStoreSearchResult[]> {
 		if (!this.configManager.isFeatureEnabled || !this.configManager.isFeatureConfigured) {
 			throw new Error("Code index feature is disabled or not configured.")
 		}
-
-		const minScore = this.configManager.currentSearchMinScore
 
 		const currentState = this.stateManager.getCurrentStatus().systemStatus
 		if (currentState !== "Indexed" && currentState !== "Indexing") {
 			// Allow search during Indexing too
 			throw new Error(`Code index is not ready for search. Current state: ${currentState}`)
 		}
-
+		query = "search_codebase: " + query // Prefix query for better context
 		try {
 			// Generate embedding for query
 			const embeddingResponse = await this.embedder.createEmbeddings([query])
@@ -45,8 +42,8 @@ export class CodeIndexSearchService {
 				throw new Error("Failed to generate embedding for query.")
 			}
 
-			// Perform search (no directory prefix filtering for now)
-			const results = await this.vectorStore.search(vector, undefined, minScore)
+			// Perform search
+			const results = await this.vectorStore.search(vector, filter)
 			return results
 		} catch (error) {
 			console.error("[CodeIndexSearchService] Error during search:", error)

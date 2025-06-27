@@ -138,7 +138,7 @@ export async function codebaseSearchTool(
 			throw new Error("Code Indexing is not configured (Missing OpenAI Key or Qdrant URL).")
 		}
 
-		const searchResults: VectorStoreSearchResult[] = await manager.searchIndex(query, 10)
+		const searchResults: VectorStoreSearchResult[] = await manager.searchIndex(query, { limit: 10 })
 
 		// 3. Format and push results
 		if (!searchResults || searchResults.length === 0) {

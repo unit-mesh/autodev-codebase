@@ -1,4 +1,4 @@
-import { VectorStoreSearchResult } from "./interfaces"
+import { VectorStoreSearchResult, SearchFilter } from "./interfaces"
 import { IndexingState, ICodeIndexManager } from "./interfaces/manager"
 import { CodeIndexConfigManager } from "./config-manager"
 import { CodeIndexStateManager } from "./state-manager"
@@ -264,12 +264,12 @@ export class CodeIndexManager implements ICodeIndexManager {
 		return this._stateManager.getCurrentStatus()
 	}
 
-	public async searchIndex(query: string, limit: number = 10): Promise<VectorStoreSearchResult[]> {
+	public async searchIndex(query: string, filter?: SearchFilter): Promise<VectorStoreSearchResult[]> {
 		if (!this.isFeatureEnabled) {
 			return []
 		}
 		this.assertInitialized()
-		return this._searchService!.searchIndex(query, limit)
+		return this._searchService!.searchIndex(query, filter)
 	}
 
 	/**

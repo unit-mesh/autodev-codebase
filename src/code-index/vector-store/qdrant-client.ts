@@ -2,9 +2,10 @@ import { QdrantClient, Schemas } from "@qdrant/js-client-rest"
 import { createHash } from "crypto"
 import * as path from "path"
 import { getWorkspacePath } from "../../utils/path"
-import { IVectorStore } from "../interfaces/vector-store"
+import { IVectorStore, SearchFilter } from "../interfaces/vector-store"
 import { Payload, VectorStoreSearchResult } from "../interfaces"
 import { MAX_SEARCH_RESULTS, SEARCH_MIN_SCORE } from "../constants"
+import { match } from "assert"
 
 /**
  * Qdrant implementation of the vector store interface
@@ -91,21 +92,21 @@ export class QdrantVectorStore implements IVectorStore {
 				}
 			}
 
-			// Create payload indexes
-			for (let i = 0; i <= 4; i++) {
-				try {
-					await this.client.createPayloadIndex(this.collectionName, {
-						field_name: `pathSegments.${i}`,
-						field_schema: "keyword",
-					})
-				} catch (indexError: any) {
-					const errorMessage = (indexError?.message || "").toLowerCase()
-					if (!errorMessage.includes("already exists")) {
-						console.warn(
-							`[QdrantVectorStore] Could not create payload index for pathSegments.${i} on ${this.collectionName}. Details:`,
-							indexError?.message || indexError,
-						)
-					}
+			
+
+			// Create index for filePath to support range queries for directoryPrefix filtering
+			try {
+				await this.client.createPayloadIndex(this.collectionName, {
+					field_name: "filePath",
+					field_schema: "keyword",
+				})
+			} catch (indexError: any) {
+				const errorMessage = (indexError?.message || "").toLowerCase()
+				if (!errorMessage.includes("already exists")) {
+					console.warn(
+						`[QdrantVectorStore] Could not create payload index for filePath on ${this.collectionName}. Details:`,
+						indexError?.message || indexError,
+					)
 				}
 			}
 			return created
@@ -178,33 +179,48 @@ export class QdrantVectorStore implements IVectorStore {
 	/**
 	 * Searches for similar vectors
 	 * @param queryVector Vector to search for
-	 * @param limit Maximum number of results to return
+	 * @param filter Search filter options
 	 * @returns Promise resolving to search results
 	 */
 	async search(
 		queryVector: number[],
-		directoryPrefix?: string,
-		minScore?: number,
+		filter?: SearchFilter,
 	): Promise<VectorStoreSearchResult[]> {
 		try {
-			let filter = undefined
+			const { directoryPrefix, pathPatterns, minScore, limit = MAX_SEARCH_RESULTS } = filter || {}
+			let qdrantFilter: any = undefined
 
+			// Build filter based on directoryPrefix or pathPatterns
 			if (directoryPrefix) {
-				const segments = directoryPrefix.split(path.sep).filter(Boolean)
-
-				filter = {
-					must: segments.map((segment, index) => ({
-						key: `pathSegments.${index}`,
-						match: { value: segment },
-					})),
+				const normalizedPrefix = directoryPrefix.replace(/\\/g, '/').replace(/\/+$/, '')
+				
+				qdrantFilter = {
+					must: [{
+						key: "filePath",
+						match: {
+							text: normalizedPrefix,
+						}
+					}]
+				}
+			} else if (pathPatterns && pathPatterns.length > 0) {
+				// Use simple text matching for path patterns
+				const shouldConditions = pathPatterns.map(pattern => ({
+					key: "filePath",
+					match: {
+						text: pattern.replace(/\\/g, '/'), // Normalize path separators
+					}
+				}))
+				
+				qdrantFilter = {
+					should: shouldConditions,
 				}
 			}
-
+			
 			const searchRequest = {
 				query: queryVector,
-				filter,
-				score_threshold: SEARCH_MIN_SCORE,
-				limit: MAX_SEARCH_RESULTS,
+				filter: qdrantFilter,
+				score_threshold: minScore ?? SEARCH_MIN_SCORE,
+				limit: limit,
 				params: {
 					hnsw_ef: 128,
 					exact: false,
@@ -213,10 +229,7 @@ export class QdrantVectorStore implements IVectorStore {
 					include: ["filePath", "codeChunk", "startLine", "endLine", "pathSegments"],
 				},
 			}
-
-			if (minScore !== undefined) {
-				searchRequest.score_threshold = minScore
-			}
+			console.log("🔍[QdrantVectorStore] Search request:", JSON.stringify({...searchRequest, query:"[query vector]"}))
 
 			const operationResult = await this.client.query(this.collectionName, searchRequest)
 			const filteredPoints = operationResult.points.filter((p) => this.isPayloadValid(p.payload))

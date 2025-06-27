@@ -23,10 +23,10 @@ export interface IVectorStore {
 	/**
 	 * Searches for similar vectors
 	 * @param queryVector Vector to search for
-	 * @param limit Maximum number of results to return
+	 * @param filter Search filter options
 	 * @returns Promise resolving to search results
 	 */
-	search(queryVector: number[], directoryPrefix?: string, minScore?: number): Promise<VectorStoreSearchResult[]>
+	search(queryVector: number[], filter?: SearchFilter): Promise<VectorStoreSearchResult[]>
 
 	/**
 	 * Deletes points by file path
@@ -55,6 +55,13 @@ export interface IVectorStore {
 	 * @returns Promise resolving to boolean indicating if the collection exists
 	 */
 	collectionExists(): Promise<boolean>
+}
+
+export interface SearchFilter {
+	directoryPrefix?: string
+	pathPatterns?: string[]
+	minScore?: number
+	limit?: number
 }
 
 export interface VectorStoreSearchResult {
