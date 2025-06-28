@@ -198,6 +198,39 @@ async function createHTTPMCPServer(manager: CodeIndexManager, options?: { port?:
   return server;
 }
 
+export async function startStdioAdapterMode(options: CliOptions): Promise<void> {
+  // console.log('🔌 Starting Stdio Adapter Mode');
+  // console.log(`🌐 Connecting to server: ${options.stdioServerUrl || 'http://localhost:3001'}`);
+  // console.log(`⏱️ Request timeout: ${options.stdioTimeout || 30000}ms`);
+  
+  const { StdioToSSEAdapter } = await import('../mcp/stdio-adapter');
+  
+  const adapter = new StdioToSSEAdapter({
+    serverUrl: options.stdioServerUrl || 'http://localhost:3001/sse',
+    timeout: options.stdioTimeout || 30000
+  });
+
+  try {
+    await adapter.start();
+    
+    // Handle graceful shutdown
+    const handleShutdown = () => {
+      console.error('🔄 Shutting down stdio adapter...');
+      adapter.stop();
+      process.exit(0);
+    };
+
+    process.on('SIGINT', handleShutdown);
+    process.on('SIGTERM', handleShutdown);
+    
+    // Keep the process alive to handle stdio communication
+    return new Promise(() => {}); // Never resolves
+  } catch (error) {
+    console.error('❌ Stdio adapter failed to start:', error);
+    process.exit(1);
+  }
+}
+
 export async function startMCPServerMode(options: CliOptions): Promise<void> {
   // Ensure options.path is absolute; if not, prepend process.cwd()
   let resolvedPath = options.path;
@@ -286,12 +319,21 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
     
     // Display configuration instructions
     console.log('\n🔗 MCP Server is now running!');
-    console.log('Configure your IDE to connect to the HTTP MCP server:');
+    console.log('To connect your IDE to the HTTP SSE MCP server, use the following configuration:');
     console.log(JSON.stringify({
       "mcpServers": {
-        "codebase": {
-          "url": `http://${options.mcpHost || 'localhost'}:${options.mcpPort || 3001}/sse`
-        }
+      "codebase": {
+        "url": `http://${options.mcpHost || 'localhost'}:${options.mcpPort || 3001}/sse`
+      }
+      }
+    }, null, 2));
+    console.log('Alternatively, to use MCP in stdio mode:');
+    console.log(JSON.stringify({
+      "mcpServers": {
+      "codebase": {
+        "command": "codebase",
+        "args": ["stdio-adapter", `--server-url=http://${options.mcpHost || 'localhost'}:${options.mcpPort || 3001}/sse`]
+      }
       }
     }, null, 2));
     console.log('');

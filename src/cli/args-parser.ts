@@ -12,6 +12,9 @@ export interface CliOptions {
   mcpServer: boolean;
   mcpPort?: number; // Port for HTTP MCP server
   mcpHost?: string; // Host for HTTP MCP server
+  stdioAdapter: boolean; // Whether to run stdio adapter mode
+  stdioServerUrl?: string; // HTTP server URL for stdio adapter
+  stdioTimeout?: number; // Request timeout for stdio adapter
 }
 
 export function parseArgs(argv: string[] = process.argv): CliOptions {
@@ -25,12 +28,20 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
     model: 'nomic-embed-text',
     logLevel: 'error',
     help: false,
-    mcpServer: false
+    mcpServer: false,
+    stdioAdapter: false
   };
 
   // Check for MCP server command (positional argument)
   if (args[0] === 'mcp-server') {
     options.mcpServer = true;
+    // Remove the command from args to process remaining options
+    args.shift();
+  }
+
+  // Check for stdio adapter command (positional argument)
+  if (args[0] === 'stdio-adapter') {
+    options.stdioAdapter = true;
     // Remove the command from args to process remaining options
     args.shift();
   }
@@ -53,6 +64,13 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
       }
     } else if (arg.startsWith('--host=')) {
       options.mcpHost = arg.split('=')[1];
+    } else if (arg.startsWith('--server-url=')) {
+      options.stdioServerUrl = arg.split('=')[1];
+    } else if (arg.startsWith('--timeout=')) {
+      const timeout = parseInt(arg.split('=')[1], 10);
+      if (!isNaN(timeout)) {
+        options.stdioTimeout = timeout;
+      }
     } else if (arg.startsWith('--ollama-url=')) {
       options.ollamaUrl = arg.split('=')[1];
     } else if (arg.startsWith('--qdrant-url=')) {
@@ -82,6 +100,7 @@ export function printHelp() {
 Usage:
   codebase [options]                    Run TUI mode (default)
   codebase mcp-server [options]         Start MCP server mode
+  codebase stdio-adapter [options]      Start stdio adapter mode
 
 Options:
   --path=<path>           Workspace path (default: current directory)
@@ -90,6 +109,10 @@ Options:
 MCP Server Options:
   --port=<port>           HTTP server port (default: 3001)
   --host=<host>           HTTP server host (default: localhost)
+
+Stdio Adapter Options:
+  --server-url=<url>      Full SSE endpoint URL (default: http://localhost:3001/sse)
+  --timeout=<ms>          Request timeout in milliseconds (default: 30000)
 
   --ollama-url=<url>      Ollama API URL (default: http://localhost:11434)
   --qdrant-url=<url>      Qdrant vector DB URL (default: http://localhost:6333)
@@ -112,6 +135,10 @@ Examples:
   codebase mcp-server                   # Use current directory
   codebase mcp-server --port=3001       # Custom port
   codebase mcp-server --path=/workspace # Explicit path
+
+  # Stdio Adapter mode
+  codebase stdio-adapter                                      # Connect to default SSE endpoint
+  codebase stdio-adapter --server-url=http://localhost:3001/sse  # Custom SSE endpoint URL
 
   # Client configuration in IDE (e.g., Cursor):
   {

@@ -1,129 +1,180 @@
-# MCP Server 实现计划 ✅ 已完成
 
-## 概述
-已成功将代码分析工具扩展为HTTP MCP服务器，提供长期运行的服务器模式，解决了重复索引和配置复杂的问题。
+# stdio-to-SSE 适配器实现计划
 
-## 架构设计 ✅
+## 项目目标
 
-### 1. MCP服务器实现 ✅
-- **创建HTTP MCP服务器模块** (`src/mcp/http-server.ts`) ✅
-  - 实现基于HTTP/SSE传输的MCP协议
-  - 向MCP客户端暴露向量搜索工具
-  - 处理工具调用和响应格式化
-  - 提供Web界面和健康检查端点
-- **保留stdio MCP服务器** (`src/mcp/server.ts`) ✅
-  - 用于双模式运行（TUI + MCP）
-  - 基于stdio传输的MCP协议
+创建一个stdio适配器，让stdio MCP客户端（如Claude Desktop）能够透明地连接到现有的HTTP/SSE MCP服务器，无需修改服务器代码。
 
-### 2. MCP工具定义 ✅
-- **`search_codebase`** - 主要语义搜索工具 ✅
-  - 参数: query (string), limit (number), filters (object)
-  - 返回: 格式化的搜索结果，包含文件路径、分数、代码块
-- **`get_search_stats`** - 索引状态和统计信息 ✅
-- **`configure_search`** - 运行时搜索配置 ✅
+## 核心设计思路
 
-### 3. CLI集成 ✅
-- **添加子命令模式** 到CLI参数解析器 ✅
-  - `codebase mcp-server` - 启动HTTP MCP服务器
-  - `codebase` - 默认TUI模式
-- **HTTP服务器参数** ✅
-  - `--port=<port>` - 自定义端口（默认3001）
-  - `--host=<host>` - 自定义主机（默认localhost）
-- **智能路径处理** ✅
-  - 自动使用当前工作目录
-  - 支持显式路径指定
+stdio MCP Client (Claude Desktop等)
+        ↓ stdin/stdout (JSON-RPC)
+StdioToSSEAdapter (新增CLI命令)
+        ↓ HTTP/SSE现有的 CodebaseHTTPMCPServer (保持不变)
 
-### 4. 服务器生命周期管理 ✅
-- **长期运行的HTTP服务器** ✅
-- **优雅关闭处理** 针对TUI和MCP服务器 ✅
-- **错误隔离** - MCP服务器故障不会导致TUI崩溃 ✅
+## 实现计划
 
-### 5. MCP协议实现 ✅
-- **HTTP/SSE传输** 用于长期运行的MCP服务器 ✅
-- **Stdio传输** 用于TUI双模式运行 ✅
-- **工具注册** 和能力广告 ✅
-- **请求/响应处理** 包含适当的错误管理 ✅
-- **资源管理** 用于大型搜索结果 ✅
+### 阶段1：扩展CLI参数解析
 
-## 实现步骤 ✅
+#### 文件：`src/cli/args-parser.ts`
 
-1. **安装MCP依赖** (`@modelcontextprotocol/sdk`) ✅
-2. **创建HTTP MCP服务器模块** 包含工具定义 ✅
-3. **扩展CLI参数解析器** 支持MCP模式 ✅
-4. **修改TUI运行器** 支持双模式运行 ✅
-5. **添加服务器生命周期管理** ✅
-6. **更新构建配置** 和package.json脚本 ✅
+**1.1 扩展CliOptions接口**
+```typescript
+export interface CliOptions {
+  // 现有字段...
+  stdioAdapter: boolean;        // 是否运行stdio适配器模式
+  stdioServerUrl?: string;      // HTTP服务器URL
+  stdioTimeout?: number;        // 请求超时时间
+}
 
-## 使用流程 🚀
+1.2 更新parseArgs函数
+- 添加对 stdio-adapter 位置参数的支持
+- 添加 --server-url= 参数解析（默认：http://localhost:3001）
+- 添加 --timeout= 参数解析（默认：30000ms）
 
-### 新的架构（推荐）- HTTP长期运行模式
-```bash
-# 1. 在项目目录下启动MCP服务器（一次性）
-cd /my/project
-codebase mcp-server                 # 使用当前目录
-# 或
-codebase mcp-server --port=3001     # 自定义端口
-# 或  
-codebase mcp-server --path=/workspace --port=3001
+1.3 更新printHelp函数
+添加stdio适配器模式的使用说明：
+# 新增模式
+codebase stdio-adapter [options]         Start stdio adapter mode
 
-# 2. 在Cursor IDE中配置（通用配置）
+# 新增选项
+Stdio Adapter Options:
+  --server-url=<url>      HTTP MCP server URL (default: http://localhost:3001)
+  --timeout=<ms>          Request timeout in milliseconds (default: 30000)
+
+阶段2：实现stdio适配器核心逻辑
+
+文件：src/mcp/stdio-adapter.ts
+
+2.1 创建StdioToSSEAdapter类
+- 基于现有的 SimpleMCPSSEClient 逻辑
+- 复用SSE连接、HTTP请求、消息处理方法
+- 移除服务器启动逻辑（假设服务器已运行）
+
+2.2 核心方法实现
+class StdioToSSEAdapter {
+  // 复用现有逻辑
+  private async connectSSE(): Promise<void>
+  private async httpRequest(path: string, method: string, data?: any): Promise<any>
+  private handleServerMessage(data: string): void
+
+  // 新增stdio处理
+  private setupStdioHandlers(): void
+  private handleStdinMessage(message: string): void
+  private writeStdoutResponse(response: any): void
+
+  // 主要入口
+  async start(): Promise<void>
+  stop(): void
+}
+
+2.3 消息转换逻辑
+- stdin JSON-RPC → HTTP POST /messages
+- SSE响应 → stdout JSON-RPC
+
+阶段3：集成到主入口
+
+文件：src/index.ts 或相关主入口文件
+
+3.1 添加stdio适配器模式分支
+if (options.stdioAdapter) {
+  const adapter = new StdioToSSEAdapter({
+    serverUrl: options.stdioServerUrl || 'http://localhost:3001',
+    timeout: options.stdioTimeout || 30000
+  });
+  await adapter.start();
+} else if (options.mcpServer) {
+  // 现有MCP服务器逻辑
+} else {
+  // 现有TUI逻辑
+}
+
+阶段4：文档和配置
+
+4.1 更新package.json
+添加便捷脚本（可选）：
 {
-  "mcpServers": {
-    "codebase": {
-        "url": "http://localhost:3001/sse"
-    }
+  "scripts": {
+    "stdio-adapter": "npx tsx src/index.ts stdio-adapter"
   }
 }
-```
 
-### 传统模式（向后兼容）
-```bash
-# 每次IDE连接都启动新进程
-codebase --path=/my/project --mcp-server
+4.2 使用文档
+更新README或相关文档，说明新的使用方式。
 
-# 在Cursor IDE设置中：
+使用方式
+
+三种运行模式
+
+# 1. TUI模式（默认）
+codebase
+
+# 2. HTTP/SSE服务器模式
+codebase mcp-server --port=3001
+
+# 3. stdio适配器模式（新增）
+codebase stdio-adapter --server-url=http://localhost:3001
+
+典型工作流程
+
+# 终端1：启动HTTP/SSE服务器
+codebase mcp-server --port=3001
+
+# 终端2：测试适配器
+codebase stdio-adapter --server-url=http://localhost:3001
+
+MCP客户端配置
+
+Claude Desktop配置示例：
 {
   "mcpServers": {
     "codebase": {
       "command": "codebase",
-      "args": ["--path=/workspace", "--mcp-server"]
+      "args": ["stdio-adapter", "--server-url=http://localhost:3001"]
     }
   }
 }
-```
 
-## 功能特性 🎯
+技术细节
 
-### Web界面
-- **主页**: `http://localhost:3001` - 服务器状态和配置说明
-- **健康检查**: `http://localhost:3001/health` - JSON格式的状态信息
-- **MCP端点**: `http://localhost:3001/mcp` - SSE/HTTP MCP协议端点
+基于现有SSE客户端
 
-### MCP工具
-- **search_codebase**: 语义搜索代码库
-- **get_search_stats**: 获取索引状态和统计
-- **configure_search**: 配置搜索参数
+复用 src/examples/debug-mcp-sse-client-simple.js 中验证的逻辑：
+- SSE连接建立（GET /sse）
+- 消息发送（POST /messages）
+- 响应接收（SSE data事件）
+- 错误处理和重连
 
-## 优势 🎉
+消息转换
 
-### 解决的问题
-- **❌ 重复索引**: 每次IDE连接都重新索引，耗时且占用资源
-- **❌ 配置复杂**: 每个项目都需要在IDE中配置不同的路径参数
-- **❌ 资源浪费**: 多个IDE窗口会启动多个服务器实例
+stdin → HTTP:
+stdin: {"jsonrpc":"2.0","id":1,"method":"tools/list"}
+  ↓
+HTTP POST /messages: {"jsonrpc":"2.0","id":1,"method":"tools/list"}
 
-### 新架构优势
-- **✅ 一次索引，长期使用**: 服务器长期运行，索引持久化
-- **✅ 配置简化**: IDE配置通用，无需为每个项目指定路径
-- **✅ 资源节省**: 每个项目只需一个服务器实例
-- **✅ 开发体验**: 在项目目录下启动服务器更直观
-- **✅ 向后兼容**: 仍支持传统的每次启动模式
-- **✅ Web界面**: 提供状态监控和配置说明
-- **✅ 双模式**: 既可以纯HTTP服务器，也可以TUI+MCP双模式
+SSE → stdout:
+SSE: data: {"jsonrpc":"2.0","id":1,"result":{"tools":[...]}}
+  ↓
+stdout: {"jsonrpc":"2.0","id":1,"result":{"tools":[...]}}
 
-## 技术实现亮点 🔧
+优势
 
-- **HTTP/SSE传输**: 基于标准Web协议，易于调试和扩展
-- **智能路径处理**: 自动使用当前工作目录，符合开发习惯
-- **优雅的错误处理**: 完善的错误隔离和恢复机制
-- **现代化CLI**: 子命令模式，参数丰富且易用
-- **完整的MCP协议**: 支持工具注册、能力广告、资源管理
+- ✅ 保持现有HTTP/SSE服务器代码不变
+- ✅ 支持stdio客户端透明接入
+- ✅ 统一的CLI接口，无需复杂的npx tsx命令
+- ✅ 复用已验证的SSE通信逻辑
+- ✅ 轻量级适配器，易于维护和调试
+- ✅ 支持服务器独立运行，处理多个并发连接
+
+实现优先级
+
+1. 高优先级：CLI参数解析扩展
+2. 高优先级：stdio适配器核心逻辑实现
+3. 中优先级：主入口集成
+4. 低优先级：文档和便捷脚本更新
+
+测试计划
+
+1. 单元测试stdio适配器的消息转换逻辑
+2. 集成测试与现有HTTP服务器的连接
+3. 端到端测试与真实MCP客户端的交互

@@ -17,6 +17,10 @@ export async function main() {
     // Pure MCP server mode - no TUI interaction to avoid stdin conflicts
     const { startMCPServerMode } = await import('./cli/tui-runner');
     await startMCPServerMode(options);
+  } else if (options.stdioAdapter) {
+    // Stdio adapter mode - bridge stdio to HTTP/SSE
+    const { startStdioAdapterMode } = await import('./cli/tui-runner');
+    await startStdioAdapterMode(options);
   } else {
     // Traditional TUI-only mode
     const { createTUIApp } = await import('./cli/tui-runner');

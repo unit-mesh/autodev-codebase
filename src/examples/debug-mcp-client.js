@@ -1,66 +1,88 @@
 #!/usr/bin/env node
 
 /**
- * Debug client for testing MCP server functionality
- * This script helps debug the codebase MCP server by sending test requests
+ * Debug client for testing stdio adapter functionality
+ * This script tests the stdio-to-SSE adapter bridge
+ * 
+ * Flow: Client -> stdio -> StdioAdapter -> HTTP/SSE -> MCP Server
+ * 
+ * Usage:
+ * 
+ * # Start HTTP/SSE server first (Terminal 1)
+ * codebase mcp-server --port=3001
+ * 
+ * # Test stdio adapter (Terminal 2)
+ * node src/examples/debug-mcp-client.js
+ * node src/examples/debug-mcp-client.js --server-url=http://localhost:3001/sse
+ * node src/examples/debug-mcp-client.js --timeout=30000
+ * 
+ * Arguments:
+ * --server-url=<url>     HTTP server URL (default: http://localhost:3001/sse)
+ * --timeout=<ms>         Request timeout in milliseconds (default: 30000)
+ * --help, -h             Show help message
  */
 
 import { spawn } from 'child_process';
 import { EventEmitter } from 'events';
 
-class MCPDebugClient extends EventEmitter {
-    constructor() {
+class StdioAdapterTestClient extends EventEmitter {
+    constructor(options = {}) {
         super();
         this.requests = new Map();
         this.requestId = 0;
+        this.serverUrl = options.serverUrl || 'http://localhost:3001/sse';
+        this.timeout = options.timeout || 30000;
     }
 
-    async startServer() {
-        console.log('🚀 Starting MCP Server process...');
-
-        // Start the MCP server process
-        // 'codebase' or 'npx tsx src/index.ts' 
-        this.serverProcess = spawn('npx', [
+    async startAdapter() {
+        console.log('🔌 Starting Stdio Adapter...');
+        console.log(`🌐 Server URL: ${this.serverUrl}`);
+        console.log(`⏱️ Timeout: ${this.timeout}ms`);
+        console.log('📝 Note: Make sure HTTP/SSE server is running separately');
+        
+        // Start stdio adapter
+        this.adapterProcess = spawn('npx', [
             'tsx',
             'src/index.ts',
-            '--path=/Users/anrgct/workspace/autodev-workbench/packages/codebase/demo',
-            '--mcp-server',
-            '--log-level=error'
+            'stdio-adapter',
+            `--server-url=${this.serverUrl}`,
+            `--timeout=${this.timeout}`
         ], {
             stdio: ['pipe', 'pipe', 'pipe'],
             env: { ...process.env }
         });
 
-        this.serverProcess.stderr.on('data', (data) => {
-            console.log('🔍 Server Log:', data.toString());
+        this.adapterProcess.stderr.on('data', (data) => {
+            console.log('🔍 Adapter Log:', data.toString());
         });
 
-        this.serverProcess.stdout.on('data', (data) => {
-            this.handleServerMessage(data.toString());
+        this.adapterProcess.stdout.on('data', (data) => {
+            this.handleAdapterMessage(data.toString());
         });
 
-        this.serverProcess.on('error', (error) => {
-            console.error('❌ Server Error:', error);
+        this.adapterProcess.on('error', (error) => {
+            console.error('❌ Adapter Error:', error);
         });
 
-        this.serverProcess.on('exit', (code) => {
-            console.log(`🔄 Server exited with code ${code}`);
+        this.adapterProcess.on('exit', (code) => {
+            console.log(`🔄 Adapter exited with code ${code}`);
         });
 
-        // Wait a bit for the server to start
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        // Wait a bit for the adapter to start
+        console.log('⏳ Waiting 2000ms for adapter to initialize...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         return this;
     }
 
-    handleServerMessage(data) {
+    handleAdapterMessage(data) {
         const lines = data.trim().split('\n');
 
         for (const line of lines) {
             try {
                 // Skip non-JSON lines (logs)
                 if (!line.startsWith('{')) {
-                    console.log('📊 Server Output:', line);
+                    console.log('📊 Adapter Output:', line);
                     continue;
                 }
 
@@ -73,7 +95,7 @@ class MCPDebugClient extends EventEmitter {
                     resolve(message);
                 }
             } catch (error) {
-                console.log('📊 Server Output:', line);
+                console.log('📊 Adapter Output:', line);
             }
         }
     }
@@ -98,9 +120,9 @@ class MCPDebugClient extends EventEmitter {
                     this.requests.delete(id);
                     reject(new Error(`Request ${id} timed out`));
                 }
-            }, 30000);
+            }, this.timeout);
 
-            this.serverProcess.stdin.write(JSON.stringify(request) + '\n');
+            this.adapterProcess.stdin.write(JSON.stringify(request) + '\n');
         });
     }
 
@@ -116,7 +138,7 @@ class MCPDebugClient extends EventEmitter {
                     sampling: {}
                 },
                 clientInfo: {
-                    name: 'debug-client',
+                    name: 'stdio-adapter-test-client',
                     version: '1.0.0'
                 }
             });
@@ -146,7 +168,7 @@ class MCPDebugClient extends EventEmitter {
             const response = await this.sendRequest('tools/call', {
                 name: 'search_codebase',
                 arguments: {
-                    query: 'function',
+                    query: 'CodeIndexManager',
                     limit: 3
                 }
             });
@@ -187,18 +209,59 @@ class MCPDebugClient extends EventEmitter {
     }
 
     stop() {
-        if (this.serverProcess) {
-            console.log('🔄 Stopping server...');
-            this.serverProcess.kill('SIGTERM');
+        if (this.adapterProcess) {
+            console.log('🔄 Stopping adapter...');
+            this.adapterProcess.kill('SIGTERM');
         }
     }
 }
 
 // Main execution
 async function main() {
-    console.log('🧪 MCP Debug Client Starting...');
+    // Parse command line arguments
+    const args = process.argv.slice(2);
+    
+    // Show help if requested
+    if (args.includes('--help') || args.includes('-h')) {
+        console.log(`
+🧪 Stdio Adapter Test Client
 
-    const client = new MCPDebugClient();
+This client tests the stdio-to-SSE adapter functionality.
+
+Flow: Client -> stdio -> StdioAdapter -> HTTP/SSE -> MCP Server
+
+Usage:
+  node src/examples/debug-mcp-client.js [options]
+
+Options:
+  --server-url=<url>       Full SSE endpoint URL (default: http://localhost:3001/sse)
+  --timeout=<ms>           Request timeout in milliseconds (default: 30000)
+  --help, -h               Show this help message
+
+Setup:
+  1. Start HTTP/SSE server:
+     codebase mcp-server --port=3001
+  
+  2. Test stdio adapter:
+     node src/examples/debug-mcp-client.js
+     node src/examples/debug-mcp-client.js --server-url=http://localhost:3001/sse
+     node src/examples/debug-mcp-client.js --timeout=30000
+`);
+        process.exit(0);
+    }
+    
+    console.log('🧪 Stdio Adapter Test Client Starting...');
+    
+    const serverUrlArg = args.find(arg => arg.startsWith('--server-url='));
+    const serverUrl = serverUrlArg ? serverUrlArg.split('=')[1] : 'http://localhost:3001/sse';
+    const timeoutArg = args.find(arg => arg.startsWith('--timeout='));
+    const timeout = timeoutArg ? parseInt(timeoutArg.split('=')[1], 10) : 30000;
+    
+    console.log(`📋 Configuration:`);
+    console.log(`   Server URL: ${serverUrl}`);
+    console.log(`   Timeout: ${timeout}ms`);
+
+    const client = new StdioAdapterTestClient({ serverUrl, timeout });
 
     // Handle graceful shutdown
     process.on('SIGINT', () => {
@@ -208,10 +271,10 @@ async function main() {
     });
 
     try {
-        await client.startServer();
+        await client.startAdapter();
         await client.runFullTest();
     } catch (error) {
-        console.error('❌ Debug session failed:', error);
+        console.error('❌ Test session failed:', error);
     } finally {
         client.stop();
         process.exit(0);
