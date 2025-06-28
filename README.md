@@ -3,9 +3,8 @@
 # @autodev/codebase
 
 <div align="center">
-  <img src="src/images/image1.png" width="300" alt="Image 1" style="margin: 0 10px;" />
-  <img src="src/images/image2.png" width="200" alt="Image 2" style="margin: 0 10px;" />
-  <img src="src/images/image3.png" height="150" alt="Image 3" style="margin: 0 10px;" />
+  <img src="src/images/image2.png" alt="Image 2" style="margin: 0 10px;" />
+  <img src="src/images/image3.png" alt="Image 3" style="margin: 0 10px;" />
 </div>
 
 <br />
@@ -63,8 +62,13 @@ curl http://localhost:11434/api/tags
 # Check Qdrant
 curl http://localhost:6333/collections
 ```
-### 4. Install project locally
+### 4. Install Autodev-codebase
 
+```bash
+npm install -g @autodev/codebase
+```
+
+Alternatively, you can install it locally:
 ```
 git clone https://github.com/anrgct/autodev-codebase
 cd autodev-codebase

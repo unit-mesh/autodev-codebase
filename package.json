@@ -1,6 +1,6 @@
 {
   "name": "@autodev/codebase",
-  "version": "0.0.1",
+  "version": "0.0.3",
   "type": "module",
   "bin": {
     "codebase": "./dist/cli.js"
@@ -13,13 +13,22 @@
     "build": "rollup -c rollup.config.cjs && chmod +x dist/cli.js",
     "type-check": "npx tsc -p tsconfig.cli.json --noEmit",
     "demo-tui": "npx tsx src/examples/run-demo-tui.tsx",
-    "mcp-server": "npx tsx src/index.ts mcp-server --demo --port=3002"
+    "mcp-server": "npx tsx src/index.ts mcp-server --demo --port=3002",
+    "push": "npm publish --access public"
   },
   "peerDependencies": {
-    "vscode": "^1.74.0"
+    "vscode": "^1.74.0",
+    "react": "^18.3.1",
+    "ink": "^4.4.1"
   },
   "peerDependenciesMeta": {
     "vscode": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "ink": {
       "optional": true
     }
   },

@@ -35,6 +35,8 @@ global.__dirname = dirname(fileURLToPath(import.meta.url));
 process.env['NODE_ENV'] = process.env['NODE_ENV'] || 'production';
 process.env['REACT_EDITOR'] = 'none';
 process.env['DISABLE_REACT_DEVTOOLS'] = 'true';
+// Prevent Ink from loading react-devtools-core
+process.env['DEV'] = 'false';
 
 process.argv = [process.argv[0], '${indexPath}', ...${JSON.stringify(cliArgs)}];
 await import('${indexPath}').then(({ main }) => main());
@@ -47,7 +49,8 @@ const child = spawn('node', ['--input-type=module', '-e', command], {
     ...process.env,
     NODE_ENV: process.env['NODE_ENV'] || 'production',
     REACT_EDITOR: 'none',
-    DISABLE_REACT_DEVTOOLS: 'true'
+    DISABLE_REACT_DEVTOOLS: 'true',
+    DEV: 'false'
   }
 });
 

@@ -5,6 +5,7 @@ const json = require('@rollup/plugin-json');
 const fs = require('fs')
 const path = require('path')
 
+
 function copyFilesPlugin() {
   return {
     name: 'copy-files-plugin',
@@ -106,8 +107,16 @@ module.exports = [
       if (id === 'vscode' || id.startsWith('vscode/')) {
         return true;
       }
-      // Externalize optional dependencies that should not be bundled
-      if (id === 'react-devtools-core' || id.includes('react-devtools-core')) {
+      // Externalize React and related dependencies to prevent devtools issues
+      if (id === 'react' || id.startsWith('react/') || id === 'react-devtools-core' || id.includes('react-devtools-core')) {
+        return true;
+      }
+      // Externalize Ink to prevent devtools bundling issues
+      if (id === 'ink' || id.startsWith('ink/')) {
+        return true;
+      }
+      // Also externalize yoga-wasm-web to avoid bundling issues
+      if (id.includes('yoga-wasm-web')) {
         return true;
       }
       // Externalize Node.js built-ins that shouldn't be bundled
@@ -147,8 +156,16 @@ module.exports = [
       if (id === 'vscode' || id.startsWith('vscode/')) {
         return true;
       }
-      // Externalize optional dependencies that should not be bundled
-      if (id === 'react-devtools-core' || id.includes('react-devtools-core')) {
+      // Externalize React and related dependencies to prevent devtools issues
+      if (id === 'react' || id.startsWith('react/') || id === 'react-devtools-core' || id.includes('react-devtools-core')) {
+        return true;
+      }
+      // Externalize Ink to prevent devtools bundling issues
+      if (id === 'ink' || id.startsWith('ink/')) {
+        return true;
+      }
+      // Also externalize yoga-wasm-web to avoid bundling issues
+      if (id.includes('yoga-wasm-web')) {
         return true;
       }
       // Externalize Node.js built-ins that shouldn't be bundled
