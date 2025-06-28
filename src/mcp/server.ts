@@ -61,13 +61,14 @@ export class CodebaseMCPServer {
                   type: 'object',
                   description: 'Optional filters for the search',
                   properties: {
+                    pathFilters: {
+                      type: 'array',
+                      items: { type: 'string' },
+                      description: 'Filter by path strings - directories, extensions, file names, Case sensitive (e.g., ["src/", ".ts", "components"])',
+                    },
                     minScore: {
                       type: 'number',
-                      description: 'Minimum similarity score threshold (0-1)',
-                    },
-                    directoryPrefix: {
-                      type: 'string',
-                      description: 'Directory path prefix to filter results',
+                      description: 'Minimum similarity score threshold (0-1)，default 0.4',
                     },
                   },
                 },
@@ -160,8 +161,7 @@ export class CodebaseMCPServer {
       const searchFilter = {
         limit: Math.min(limit, 50),
         minScore: filters?.minScore,
-        directoryPrefix: filters?.directoryPrefix,
-        pathPatterns: filters?.pathPatterns
+        pathFilters: filters?.pathFilters
       };
       const searchResults = await this.codeIndexManager.searchIndex(query, searchFilter);
       // console.log('[MCP Server] Search results:', JSON.stringify(searchResults));

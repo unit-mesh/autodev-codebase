@@ -277,10 +277,9 @@ class SimpleMCPSSEClient {
                 name: 'search_codebase',
                 arguments: {
                     query: 'CodeIndexManager',
-                    limit: 10,
+                    limit: 50,
                     filters: {
-                        // directoryPrefix: 'shared',
-                        pathPatterns: ['src/code-index/shared','tui2']   
+                        pathFilters: ['src/examples/tui/SearchInterface.tsx']   
                     }
                 }
             });

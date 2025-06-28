@@ -187,24 +187,13 @@ export class QdrantVectorStore implements IVectorStore {
 		filter?: SearchFilter,
 	): Promise<VectorStoreSearchResult[]> {
 		try {
-			const { directoryPrefix, pathPatterns, minScore, limit = MAX_SEARCH_RESULTS } = filter || {}
+			const { pathFilters, minScore, limit = MAX_SEARCH_RESULTS } = filter || {}
 			let qdrantFilter: any = undefined
 
-			// Build filter based on directoryPrefix or pathPatterns
-			if (directoryPrefix) {
-				const normalizedPrefix = directoryPrefix.replace(/\\/g, '/').replace(/\/+$/, '')
-				
-				qdrantFilter = {
-					must: [{
-						key: "filePath",
-						match: {
-							text: normalizedPrefix,
-						}
-					}]
-				}
-			} else if (pathPatterns && pathPatterns.length > 0) {
-				// Use simple text matching for path patterns
-				const shouldConditions = pathPatterns.map(pattern => ({
+			// Build filter based on pathFilters
+			if (pathFilters && pathFilters.length > 0) {
+				// Use pathFilters - treat all as text patterns that can match any part of file paths
+				const shouldConditions = pathFilters.map(pattern => ({
 					key: "filePath",
 					match: {
 						text: pattern.replace(/\\/g, '/'), // Normalize path separators

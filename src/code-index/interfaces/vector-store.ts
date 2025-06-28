@@ -58,8 +58,7 @@ export interface IVectorStore {
 }
 
 export interface SearchFilter {
-	directoryPrefix?: string
-	pathPatterns?: string[]
+	pathFilters?: string[]
 	minScore?: number
 	limit?: number
 }

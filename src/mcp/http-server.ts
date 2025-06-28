@@ -47,41 +47,46 @@ export class CodebaseHTTPMCPServer {
             'Search the codebase using semantic vector search to find relevant code snippets, functions, and documentation.',
             {
                 query: z.string().describe('The search query to find relevant code'),
-                limit: z.number().optional().default(10).describe('Maximum number of results to return (default: 10)'),
+                limit: z.number().optional().default(20).describe('Maximum number of results to return (default: 20)'),
                 filters: z.object({
-                    
-                    pathPatterns: z.array(z.string()).optional().describe('Filter by path patterns (e.g., ["src/", "test/"])'),
-                    minScore: z.number().optional().describe('Minimum similarity score threshold (0-1)'),
-                    directoryPrefix: z.string().optional().describe('Directory path prefix to filter results')
+                    pathFilters: z.array(z.string()).optional().describe('Filter by path strings - directories, extensions, file names, Case sensitive (e.g., ["src/", ".ts", "components"])'),
+                    minScore: z.number().optional().describe('Minimum similarity score threshold (0-1)，default 0.4')
                 }).optional().describe('Optional filters for file types, paths, etc.')
             },
-            async ({ query, limit = 10, filters }): Promise<CallToolResult> => {
+            async ({ query, limit = 20, filters }): Promise<CallToolResult> => {
+                if (limit === 0) {
+                    limit = 20; // Default limit if not provided
+                }
+                if (!query || !query.trim() || typeof query !== 'string') {
+                    throw new Error('Query parameter is required and must be a string');
+                }
                 // console.log(`🔍[MCP Server] Handling search_codebase with query: "${query}", limit: ${limit}, filters:`, filters);
                 return await this.handleSearchCodebase({ query, limit, filters });
             }
         );
 
-        // Register get_search_stats tool
-        this.mcpServer.tool(
-            'get_search_stats',
-            'Get statistics about the codebase index including file count, indexed files, and indexing status.',
-            async (): Promise<CallToolResult> => {
-                return await this.handleGetSearchStats();
-            }
-        );
+        // disable for uncompleted feature
+        // // Register get_search_stats tool
+        // this.mcpServer.tool(
+        //     'get_search_stats',
+        //     'Get statistics about the codebase index including file count, indexed files, and indexing status.',
+        //     async (): Promise<CallToolResult> => {
+        //         return await this.handleGetSearchStats();
+        //     }
+        // );
 
-        // Register configure_search tool
-        this.mcpServer.tool(
-            'configure_search',
-            'Configure search settings like model parameters or update the index.',
-            {
-                action: z.enum(['refresh_index', 'update_model']).describe('The configuration action to perform'),
-                model: z.string().optional().describe('New embedding model to use (for update_model action)')
-            },
-            async ({ action, model }): Promise<CallToolResult> => {
-                return await this.handleConfigureSearch({ action, model });
-            }
-        );
+        // // Register configure_search tool
+        // this.mcpServer.tool(
+        //     'configure_search',
+        //     'Configure search settings like model parameters or update the index.',
+        //     {
+        //         action: z.enum(['refresh_index', 'update_model']).describe('The configuration action to perform'),
+        //         model: z.string().optional().describe('New embedding model to use (for update_model action)')
+        //     },
+        //     async ({ action, model }): Promise<CallToolResult> => {
+        //         return await this.handleConfigureSearch({ action, model });
+        //     }
+        // );
     }
 
     private createServer(): McpServer {
@@ -111,8 +116,7 @@ export class CodebaseHTTPMCPServer {
             const searchFilter = {
                 limit: Math.min(limit, 50),
                 minScore: filters?.minScore,
-                directoryPrefix: filters?.directoryPrefix,
-                pathPatterns: filters?.pathPatterns
+                pathFilters: filters?.pathFilters
             };
             const searchResults = await this.codeIndexManager.searchIndex(query, searchFilter);
 
@@ -127,26 +131,89 @@ export class CodebaseHTTPMCPServer {
                 };
             }
 
-            const formattedResults = searchResults.map((result: any, index: number) => {
+            // 按文件路径分组搜索结果
+            const resultsByFile = new Map<string, any[]>();
+            searchResults.forEach((result: any) => {
                 const filePath = result.payload?.filePath || 'Unknown file';
-                const score = result.score?.toFixed(3) || '0.000';
-                const codeChunk = result.payload?.codeChunk || 'No content available';
-                const startLine = result.payload?.startLine;
-                const endLine = result.payload?.endLine;
-                const lineInfo = (startLine !== undefined && endLine !== undefined)
-                    ? ` (L${startLine}-${endLine})`
-                    : '';
+                if (!resultsByFile.has(filePath)) {
+                    resultsByFile.set(filePath, []);
+                }
+                resultsByFile.get(filePath)!.push(result);
+            });
 
-                return `File: \`${filePath}\`${lineInfo} | Score: ${score}
+            const formattedResults = Array.from(resultsByFile.entries()).map(([filePath, results]) => {
+                // 对同一文件的结果按行号排序
+                results.sort((a, b) => {
+                    const lineA = a.payload?.startLine || 0;
+                    const lineB = b.payload?.startLine || 0;
+                    return lineA - lineB;
+                });
+
+
+                // 去重：移除被其他片段包含的重复片段
+                const deduplicatedResults = [];
+                for (let i = 0; i < results.length; i++) {
+                    const current = results[i];
+                    const currentStart = current.payload?.startLine || 0;
+                    const currentEnd = current.payload?.endLine || 0;
+                    
+                    // 检查当前片段是否被其他片段包含
+                    let isContained = false;
+                    for (let j = 0; j < results.length; j++) {
+                        if (i === j) continue; // 跳过自己
+                        
+                        const other = results[j];
+                        const otherStart = other.payload?.startLine || 0;
+                        const otherEnd = other.payload?.endLine || 0;
+                        
+                        // 如果当前片段被其他片段完全包含，则标记为重复
+                        if (otherStart <= currentStart && otherEnd >= currentEnd && 
+                            !(otherStart === currentStart && otherEnd === currentEnd)) {
+                            isContained = true;
+                            break;
+                        }
+                    }
+                    
+                    // 如果没有被包含，则保留这个片段
+                    if (!isContained) {
+                        deduplicatedResults.push(current);
+                    }
+                }
+
+                // 使用去重后的结果计算平均分数
+                const avgScore = deduplicatedResults.length > 0 
+                    ? deduplicatedResults.reduce((sum, r) => sum + (r.score || 0), 0) / deduplicatedResults.length
+                    : 0;
+                
+                // 合并代码片段，优化显示格式
+                const codeChunks = deduplicatedResults.map((result: any, index: number) => {
+                    const codeChunk = result.payload?.codeChunk || 'No content available';
+                    const startLine = result.payload?.startLine;
+                    const endLine = result.payload?.endLine;
+                    const lineInfo = (startLine !== undefined && endLine !== undefined)
+                        ? ` (L${startLine}-${endLine})`
+                        : '';
+                    const score = result.score?.toFixed(3) || '0.000';
+                    
+                    return `${lineInfo}
+${codeChunk}`;
+                }).join('\n' + '─'.repeat(5) + '\n');
+
+                const snippetInfo = deduplicatedResults.length > 1 ? ` | ${deduplicatedResults.length} snippets` : '';
+                const duplicateInfo = results.length !== deduplicatedResults.length 
+                    ? ` (${results.length - deduplicatedResults.length} duplicates removed)` 
+                    : '';
+                return `File: \`${filePath}\` | Avg Score: ${avgScore.toFixed(3)}${snippetInfo}${duplicateInfo}
 \`\`\`
-${codeChunk}
+${codeChunks}
 \`\`\`
 `;
             });
 
-            const summary = `Found ${searchResults.length} results for query: "${query}":\n\n${formattedResults.join('\n\n')}`;
+            const fileCount = resultsByFile.size;
+            const summary = `Found ${searchResults.length} result${searchResults.length > 1 ? 's' : ''} in ${fileCount} file${fileCount > 1 ? 's' : ''} for: "${query}"\n\n${formattedResults.join('\n')}`;
 
-            console.log(`🔍[MCP Server] Search results ${searchResults.length} items for query "${query}"`);
+            console.log(`🔍[MCP Server] ${searchResults.length} results in ${fileCount} files for "${query}"`);
             return {
                 content: [
                     {
