@@ -3,8 +3,8 @@
 # @autodev/codebase
 
 <div align="center">
-  <img src="src/images/image2.png" alt="Image 2" style="margin: 0 10px;" />
-  <img src="src/images/image3.png" alt="Image 3" style="margin: 0 10px;" />
+  <img src="src/images/image2.png" alt="Image 2" style="display: inline-block; width: 350px; margin: 0 10px;" />
+  <img src="src/images/image3.png" alt="Image 3" style="display: inline-block; width: 200px; margin: 0 10px;" />
 </div>
 
 <br />
