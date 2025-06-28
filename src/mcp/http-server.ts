@@ -326,7 +326,17 @@ Note: Configuration changes will apply to subsequent searches.
 
         // Simple SSE endpoint following demo-server pattern exactly
         app.get('/sse', async (_req: Request, res: Response) => {
+            const sessionId = this.generateSessionId();
             transport = new SSEServerTransport('/messages', res);
+            
+            // Track the transport for proper cleanup
+            this.sseTransports.set(sessionId, transport);
+            
+            // Clean up when connection closes
+            res.on('close', () => {
+                this.sseTransports.delete(sessionId);
+            });
+            
             await this.mcpServer.connect(transport);
         });
 
@@ -404,16 +414,55 @@ Note: Configuration changes will apply to subsequent searches.
 
     async stop(): Promise<void> {
         return new Promise((resolve) => {
-            // Close MCP server
-            if (this.mcpServer) {
-                this.mcpServer.close();
-            }
+            let resolved = false;
+            
+            const cleanup = () => {
+                if (!resolved) {
+                    resolved = true;
+                    console.log('MCP Server stopped');
+                    resolve();
+                }
+            };
 
-            // Close HTTP server
-            this.httpServer.close(() => {
-                console.log('MCP Server stopped');
-                resolve();
-            });
+            // Set a timeout to force exit if graceful shutdown fails
+            const forceExitTimer = setTimeout(() => {
+                console.log('Force stopping MCP Server...');
+                cleanup();
+            }, 2000);
+
+            try {
+                // Close MCP server connections
+                if (this.mcpServer) {
+                    this.mcpServer.close();
+                }
+
+                // Close all SSE transports
+                this.sseTransports.forEach((transport, sessionId) => {
+                    try {
+                        transport.close();
+                    } catch (error) {
+                        console.warn(`Failed to close SSE transport ${sessionId}:`, error);
+                    }
+                });
+                this.sseTransports.clear();
+
+                // Close HTTP server
+                this.httpServer.close((error) => {
+                    clearTimeout(forceExitTimer);
+                    if (error) {
+                        console.warn('HTTP server close error:', error);
+                    }
+                    cleanup();
+                });
+
+                // Force close all connections
+                this.httpServer.closeAllConnections?.();
+                
+            } catch (error) {
+                clearTimeout(forceExitTimer);
+                console.warn('Error during shutdown:', error);
+                cleanup();
+            }
         });
     }
 }

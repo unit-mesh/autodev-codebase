@@ -116,6 +116,22 @@ Configure your IDE to connect to the MCP server:
 }
 ```
 
+For clients that do not support SSE MCP, you can use the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "codebase": {
+      "command": "codebase",
+      "args": [
+        "stdio-adapter",
+        "--server-url=http://localhost:3001/sse"
+      ]
+    }
+  }
+}
+```
+
 ### Library Usage
 
 #### Node.js Usage
