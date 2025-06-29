@@ -31,6 +31,13 @@ export class CacheManager implements ICacheManager {
 	}
 
 	/**
+	 * Gets the cache file path
+	 */
+	get getCachePath(): string {
+		return this.cachePath
+	}
+
+	/**
 	 * Initializes the cache manager by loading the cache file
 	 */
 	async initialize(): Promise<void> {

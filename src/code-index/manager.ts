@@ -135,7 +135,7 @@ export class CodeIndexManager implements ICodeIndexManager {
 			)
 			await this._cacheManager.initialize()
 		}
-
+		// console.log(`[CodeIndexManager] Cache initialized at ${this._cacheManager.getCachePath}`)
 		// 4. Determine if Core Services Need Recreation
 		const needsServiceRecreation = !this._serviceFactory || requiresRestart
 

@@ -19,12 +19,13 @@ import {
 	IVectorStore,
 	PointStruct,
 	BatchProcessingSummary,
+	CodeBlock,
 } from "../interfaces"
 import { BatchProcessor, BatchProcessorOptions } from "./batch-processor"
 import { codeParser } from "./parser"
 import { CacheManager } from "../cache-manager"
-import { generateNormalizedAbsolutePath, generateRelativeFilePath } from "../shared/get-relative-path"
 import { IEventBus, IFileSystem } from "../../abstractions/core"
+import { IWorkspace, IPathUtils } from "../../abstractions/workspace"
 
 /**
  * Implementation of the file watcher interface
@@ -40,7 +41,9 @@ export class FileWatcher implements ICodeFileWatcher {
 
 	private eventBus: IEventBus
 	private fileSystem: IFileSystem
-	private batchProcessor: BatchProcessor<{ filePath: string; type: "create" | "change" | "delete"; content?: string; newHash?: string }>
+	private workspace: IWorkspace
+	private pathUtils: IPathUtils
+	private batchProcessor: BatchProcessor<CodeBlock>
 
 	/**
 	 * Event emitted when a batch of files begins processing
@@ -74,6 +77,8 @@ export class FileWatcher implements ICodeFileWatcher {
 		private workspacePath: string,
 		fileSystem: IFileSystem,
 		eventBus: IEventBus,
+		workspace: IWorkspace,
+		pathUtils: IPathUtils,
 		private readonly cacheManager: CacheManager,
 		private embedder?: IEmbedder,
 		private vectorStore?: IVectorStore,
@@ -82,7 +87,9 @@ export class FileWatcher implements ICodeFileWatcher {
 	) {
 		this.eventBus = eventBus
 		this.fileSystem = fileSystem
-		this.ignoreController = ignoreController || new RooIgnoreController(workspacePath)
+		this.workspace = workspace
+		this.pathUtils = pathUtils
+		this.ignoreController = ignoreController || new RooIgnoreController(fileSystem, workspace, pathUtils)
 		this.batchProcessor = new BatchProcessor()
 		if (ignoreInstance) {
 			this.ignoreInstance = ignoreInstance
@@ -101,7 +108,7 @@ export class FileWatcher implements ICodeFileWatcher {
 		// Create file watcher using Node.js fs.watch
 		this.fileWatcher = fs.watch(this.workspacePath, { recursive: true }, (eventType, filename) => {
 			if (!filename) return
-
+			// console.log(`[FileWatcher] Detected ${eventType} on file: ${filename}`)
 			const fullPath = path.join(this.workspacePath, filename)
 
 			// Check if file extension is supported
@@ -110,17 +117,19 @@ export class FileWatcher implements ICodeFileWatcher {
 
 			// Handle different event types
 			if (eventType === 'rename') {
-				// Check if file exists to determine if it's create or delete
-				fs.access(fullPath, fs.constants.F_OK, (err) => {
-					if (err) {
-						// File doesn't exist, it was deleted
-						this.handleFileDeleted(fullPath)
-					} else {
-						// File exists, it was created
-						this.handleFileCreated(fullPath)
-					}
-				})
+				// Use synchronous check for more reliable file existence detection
+				try {
+					fs.accessSync(fullPath, fs.constants.F_OK)
+					// File exists, it was created or moved here
+					// console.log(`[FileWatcher] File exists, treating as create: ${fullPath}`)
+					this.handleFileCreated(fullPath)
+				} catch (err) {
+					// File doesn't exist, it was deleted or moved away
+					// console.log(`[FileWatcher] File doesn't exist, treating as delete: ${fullPath}`)
+					this.handleFileDeleted(fullPath)
+				}
 			} else if (eventType === 'change') {
+				// console.log(`[FileWatcher] File changed: ${fullPath}`)
 				this.handleFileChanged(fullPath)
 			}
 		})
@@ -199,9 +208,10 @@ export class FileWatcher implements ICodeFileWatcher {
 	private async processBatch(
 		events: Array<{ filePath: string; type: "create" | "change" | "delete" }>,
 	): Promise<void> {
+		console.log(`[FileWatcher] Processing batch of ${events.length} events`, JSON.stringify(events))
 		const batchResults: FileProcessingResult[] = []
 		const totalFilesInBatch = events.length
-		
+
 		// Initial progress update
 		this.eventBus.emit('batch-progress', {
 			processedInBatch: 0,
@@ -211,7 +221,7 @@ export class FileWatcher implements ICodeFileWatcher {
 
 		// Prepare events with content for non-delete operations
 		const eventsWithContent: Array<{ filePath: string; type: "create" | "change" | "delete"; content?: string; newHash?: string }> = []
-		
+
 		for (const event of events) {
 			if (event.type === "delete") {
 				eventsWithContent.push(event)
@@ -221,7 +231,7 @@ export class FileWatcher implements ICodeFileWatcher {
 					const fileContent = await this.fileSystem.readFile(event.filePath)
 					const content = new TextDecoder().decode(fileContent)
 					const newHash = createHash("sha256").update(content).digest("hex")
-					
+
 					eventsWithContent.push({
 						...event,
 						content,
@@ -238,105 +248,141 @@ export class FileWatcher implements ICodeFileWatcher {
 			}
 		}
 
-		// Use BatchProcessor for the actual processing
-		if (this.embedder && this.vectorStore) {
-			const options: BatchProcessorOptions<typeof eventsWithContent[0]> = {
+		// Parse files into code blocks and separate deletions
+		const blocksToUpsert: CodeBlock[] = []
+		const filesToDelete: string[] = []
+		const fileInfoMap: Map<string, { fileHash: string; isNew: boolean }> = new Map()
+
+		for (const event of eventsWithContent) {
+			if (event.type === "delete") {
+				filesToDelete.push(event.filePath)
+			} else if (event.content && event.newHash) {
+				// Parse the file to get code blocks like DirectoryScanner does
+				try {
+					const blocks = await codeParser.parseFile(event.filePath, {
+						content: event.content,
+						fileHash: event.newHash
+					})
+					
+					// Add all blocks from this file to the batch
+					blocks.forEach(block => {
+						if (block.content.trim()) {
+							blocksToUpsert.push(block)
+						}
+					})
+					
+					// Store file info for later use
+					fileInfoMap.set(event.filePath, {
+						fileHash: event.newHash,
+						isNew: event.type === "create"
+					})
+				} catch (error) {
+					console.error(`[FileWatcher] Failed to parse file ${event.filePath}:`, error)
+					batchResults.push({
+						path: event.filePath,
+						status: "error",
+						error: error as Error
+					})
+				}
+			}
+		}
+
+		// Deletions will be handled by BatchProcessor
+
+		// Use BatchProcessor for both deletions and upserting blocks (like DirectoryScanner)
+		if (this.embedder && this.vectorStore && (blocksToUpsert.length > 0 || filesToDelete.length > 0)) {
+			console.log(`[FileWatcher] Processing batch of ${blocksToUpsert.length} Upserts and ${filesToDelete.length} deletions`)
+			const options: BatchProcessorOptions<CodeBlock> = {
 				embedder: this.embedder,
 				vectorStore: this.vectorStore,
 				cacheManager: this.cacheManager,
-				
-				itemToText: (item) => item.content || "",
-				itemToFilePath: (item) => item.filePath,
-				getFileHash: (item) => item.newHash || "",
-				
-				itemToPoint: (item, embedding) => {
-					if (!item.content) {
-						throw new Error(`No content available for ${item.filePath}`)
-					}
-					
-					// Parse the file to get code blocks
-					const blocks = codeParser.parseFile(item.filePath, { 
-						content: item.content, 
-						fileHash: item.newHash || "" 
-					})
-					
-					// For simplicity, create a single point per file
-					// In a real implementation, you might want to create multiple points for multiple blocks
-					const normalizedAbsolutePath = generateNormalizedAbsolutePath(item.filePath)
-					const stableName = `${normalizedAbsolutePath}:0`
+
+				itemToText: (block) => block.content,
+				itemToFilePath: (block) => block.file_path,
+				getFileHash: (block) => {
+					// Find the corresponding file info for this block
+					const fileInfo = fileInfoMap.get(block.file_path)
+					return fileInfo?.fileHash || ""
+				},
+
+				itemToPoint: (block, embedding) => {
+					// Use the same logic as DirectoryScanner
+					const normalizedAbsolutePath = this.pathUtils.normalize(this.pathUtils.resolve(block.file_path))
+					const stableName = `${normalizedAbsolutePath}:${block.start_line}`
 					const pointId = uuidv5(stableName, QDRANT_CODE_BLOCK_NAMESPACE)
-					
+
 					return {
 						id: pointId,
 						vector: embedding,
 						payload: {
-							filePath: generateRelativeFilePath(normalizedAbsolutePath),
-							codeChunk: item.content,
-							startLine: 1,
-							endLine: item.content.split('\n').length,
+							filePath: this.workspace.getRelativePath(normalizedAbsolutePath),
+							codeChunk: block.content,
+							startLine: block.start_line,
+							endLine: block.end_line,
 						},
 					}
 				},
-				
-				getFilesToDelete: (items) => {
-					const filesToDelete: string[] = []
-					for (const item of items) {
-						if (item.type === "delete") {
-							filesToDelete.push(item.filePath)
-						} else if (item.type === "change") {
-							// For change events, we need to delete old points first
-							filesToDelete.push(item.filePath)
-						}
-					}
-					return filesToDelete
+
+				getFilesToDelete: (blocks) => {
+					// Get files that need to be deleted (modified files, not new ones) + explicit deletions
+					const uniqueFilePaths = Array.from(new Set(
+						blocks
+							.map(block => block.file_path)
+							.filter(filePath => {
+								const fileInfo = fileInfoMap.get(filePath)
+								return fileInfo && !fileInfo.isNew // Only modified files (not new)
+							})
+					))
+					// Convert all paths to relative paths for deletion
+					const relativeDeletePaths = filesToDelete.map(path => this.workspace.getRelativePath(path))
+					const relativeUpdatePaths = uniqueFilePaths.map(path => this.workspace.getRelativePath(path))
+					return [...relativeDeletePaths, ...relativeUpdatePaths]
 				},
-				
-				onProgress: (processed, total, currentFile) => {
+
+				onProgress: (processed, total) => {
 					this.eventBus.emit('batch-progress', {
 						processedInBatch: processed,
 						totalInBatch: total,
-						currentFile,
 					})
 				},
-				
+
 				onError: (error) => {
 					console.error("[FileWatcher] Batch processing error:", error)
 				}
 			}
-			
+
 			const result = await this.batchProcessor.processBatch(
-				eventsWithContent.filter(e => e.type !== "delete" && e.content),
+				blocksToUpsert,
 				options
 			)
-			
-			// Convert BatchProcessor results to FileProcessingResult format
-			for (const event of eventsWithContent) {
-				if (event.type === "delete" || !event.content) {
-					// Handle delete events and files that couldn't be read
-					batchResults.push({
-						path: event.filePath,
-						status: "success"
-					})
+
+			// Add BatchProcessor results to our batch results
+			batchResults.push(...result.processedFiles)
+		} else if (this.vectorStore && filesToDelete.length > 0) {
+			console.log(`[FileWatcher] Processing batch of ${filesToDelete.length} deletions without embedder`)
+			// Handle deletions even without embedder - convert to relative paths
+			const relativeDeletePaths = filesToDelete.map(path => this.workspace.getRelativePath(path))
+			try {
+				await this.vectorStore.deletePointsByMultipleFilePaths(relativeDeletePaths)
+				for (const filePath of filesToDelete) {
+					this.cacheManager.deleteHash(filePath)
+					batchResults.push({ path: filePath, status: "success" })
 				}
-			}
-			
-			// Add any errors from batch processing
-			for (const error of result.errors) {
-				batchResults.push({
-					path: "unknown",
-					status: "error",
-					error
-				})
+			} catch (error) {
+				console.error("[FileWatcher] Error deleting points for files:", filesToDelete, error)
+				for (const filePath of filesToDelete) {
+					batchResults.push({ path: filePath, status: "error", error: error as Error })
+				}
 			}
 		}
 
 		// Finalize
 		this.eventBus.emit('batch-finish', {
 			processedFiles: batchResults,
-			batchError: batchResults.some(r => r.status === "error") ? 
+			batchError: batchResults.some(r => r.status === "error") ?
 				new Error("Some files failed to process") : undefined,
 		})
-		
+
 		this.eventBus.emit('batch-progress', {
 			processedInBatch: totalFilesInBatch,
 			totalInBatch: totalFilesInBatch,
@@ -359,7 +405,7 @@ export class FileWatcher implements ICodeFileWatcher {
 	async processFile(filePath: string): Promise<FileProcessingResult> {
 		try {
 			// Check if file should be ignored
-			const relativeFilePath = generateRelativeFilePath(filePath)
+			const relativeFilePath = this.workspace.getRelativePath(filePath)
 			if (
 				!this.ignoreController.validateAccess(filePath) ||
 				(this.ignoreInstance && this.ignoreInstance.ignores(relativeFilePath))
@@ -407,7 +453,7 @@ export class FileWatcher implements ICodeFileWatcher {
 				const { embeddings } = await this.embedder.createEmbeddings(texts)
 
 				pointsToUpsert = blocks.map((block, index) => {
-					const normalizedAbsolutePath = generateNormalizedAbsolutePath(block.file_path)
+					const normalizedAbsolutePath = this.pathUtils.normalize(this.pathUtils.resolve(block.file_path))
 					const stableName = `${normalizedAbsolutePath}:${block.start_line}`
 					const pointId = uuidv5(stableName, QDRANT_CODE_BLOCK_NAMESPACE)
 
@@ -415,7 +461,7 @@ export class FileWatcher implements ICodeFileWatcher {
 						id: pointId,
 						vector: embeddings[index],
 						payload: {
-							filePath: generateRelativeFilePath(normalizedAbsolutePath),
+							filePath: this.workspace.getRelativePath(normalizedAbsolutePath),
 							codeChunk: block.content,
 							startLine: block.start_line,
 							endLine: block.end_line,

@@ -1,4 +1,4 @@
-import { IEmbedder, IVectorStore, PointStruct } from "../interfaces"
+import { IEmbedder, IVectorStore, PointStruct, FileProcessingResult } from "../interfaces"
 import { CacheManager } from "../cache-manager"
 import { 
 	BATCH_SEGMENT_THRESHOLD, 
@@ -10,6 +10,7 @@ export interface BatchProcessingResult {
 	processed: number
 	failed: number
 	errors: Error[]
+	processedFiles: FileProcessingResult[]
 }
 
 export interface BatchProcessorOptions<T> {
@@ -45,26 +46,27 @@ export class BatchProcessor<T> {
 		items: T[], 
 		options: BatchProcessorOptions<T>
 	): Promise<BatchProcessingResult> {
-		if (items.length === 0) {
-			return { processed: 0, failed: 0, errors: [] }
-		}
-
-		const result: BatchProcessingResult = { processed: 0, failed: 0, errors: [] }
+		// console.log(`[BatchProcessor] Starting batch processing for ${items.length} items`)
+		
+		const result: BatchProcessingResult = { processed: 0, failed: 0, errors: [], processedFiles: [] }
 		
 		// Report initial progress
 		options.onProgress?.(0, items.length)
 
 		try {
-			// Phase 1: Handle deletions if needed
+			// Phase 1: Handle deletions if needed (even if items is empty)
 			if (options.getFilesToDelete) {
 				const filesToDelete = options.getFilesToDelete(items)
+				console.log(`[BatchProcessor] Files to delete: ${filesToDelete.length}`, filesToDelete)
 				if (filesToDelete.length > 0) {
 					await this.handleDeletions(filesToDelete, options, result)
 				}
 			}
 
-			// Phase 2: Process items in batches
-			await this.processItemsInBatches(items, options, result)
+			// Phase 2: Process items in batches (only if there are items to process)
+			if (items.length > 0) {
+				await this.processItemsInBatches(items, options, result)
+			}
 
 			return result
 		} catch (error) {
@@ -83,14 +85,27 @@ export class BatchProcessor<T> {
 		try {
 			await options.vectorStore.deletePointsByMultipleFilePaths(filesToDelete)
 			
-			// Clear cache for deleted files
+			// Clear cache for deleted files and record successful deletions
 			for (const filePath of filesToDelete) {
 				options.cacheManager.deleteHash(filePath)
+				result.processedFiles.push({
+					path: filePath,
+					status: "success"
+				})
 			}
 		} catch (error) {
 			const err = error as Error
 			result.errors.push(err)
 			options.onError?.(err)
+			
+			// Record failed deletions
+			for (const filePath of filesToDelete) {
+				result.processedFiles.push({
+					path: filePath,
+					status: "error",
+					error: err
+				})
+			}
 			throw err
 		}
 	}
@@ -144,6 +159,11 @@ export class BatchProcessor<T> {
 					}
 					
 					result.processed++
+					result.processedFiles.push({
+						path: filePath,
+						status: "success",
+						newHash: fileHash
+					})
 					options.onProgress?.(result.processed, result.processed + result.failed, filePath)
 				}
 
@@ -168,9 +188,14 @@ export class BatchProcessor<T> {
 			result.errors.push(batchError)
 			options.onError?.(batchError)
 			
-			// Still report progress for failed items
+			// Record failed items and still report progress
 			for (const item of batchItems) {
 				const filePath = options.itemToFilePath(item)
+				result.processedFiles.push({
+					path: filePath,
+					status: "error",
+					error: lastError
+				})
 				options.onProgress?.(result.processed, result.processed + result.failed, filePath)
 			}
 		}

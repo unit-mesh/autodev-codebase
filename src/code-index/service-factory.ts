@@ -158,12 +158,14 @@ export class CodeIndexServiceFactory {
 	public createFileWatcher(
 		fileSystem: IFileSystem,
 		eventBus: IEventBus,
+		workspace: IWorkspace,
+		pathUtils: IPathUtils,
 		embedder: IEmbedder,
 		vectorStore: IVectorStore,
 		cacheManager: CacheManager,
 		ignoreInstance: Ignore,
 	): ICodeFileWatcher {
-		return new FileWatcher(this.workspacePath, fileSystem, eventBus, cacheManager, embedder, vectorStore, ignoreInstance)
+		return new FileWatcher(this.workspacePath, fileSystem, eventBus, workspace, pathUtils, cacheManager, embedder, vectorStore, ignoreInstance)
 	}
 
 	/**
@@ -192,7 +194,7 @@ export class CodeIndexServiceFactory {
 		const vectorStore = this.createVectorStore()
 		const parser = codeParser
 		const scanner = this.createDirectoryScanner(embedder, vectorStore, parser, ignoreInstance, fileSystem, workspace, pathUtils)
-		const fileWatcher = this.createFileWatcher(fileSystem, eventBus, embedder, vectorStore, cacheManager, ignoreInstance)
+		const fileWatcher = this.createFileWatcher(fileSystem, eventBus, workspace, pathUtils, embedder, vectorStore, cacheManager, ignoreInstance)
 
 		return {
 			embedder,

@@ -1,8 +1,6 @@
-import * as path from "path"
-import { fileExistsAtPath } from "../utils/fs"
-import { promises as fs } from "fs"
 import ignore, { Ignore } from "ignore"
-import { IFileWatcher, FileWatchEvent } from "../abstractions/core"
+import { IFileWatcher, FileWatchEvent, IFileSystem } from "../abstractions/core"
+import { IWorkspace, IPathUtils } from "../abstractions/workspace"
 
 export const LOCK_TEXT_SYMBOL = "\u{1F512}"
 
@@ -12,14 +10,23 @@ export const LOCK_TEXT_SYMBOL = "\u{1F512}"
  * Uses the 'ignore' library to support standard .gitignore syntax in .rooignore files.
  */
 export class RooIgnoreController {
-	private cwd: string
 	private ignoreInstance: Ignore
 	private cleanupFunctions: (() => void)[] = []
 	private fileWatcher?: IFileWatcher
+	private fileSystem: IFileSystem
+	private workspace: IWorkspace
+	private pathUtils: IPathUtils
 	rooIgnoreContent: string | undefined
 
-	constructor(cwd: string, fileWatcher?: IFileWatcher) {
-		this.cwd = cwd
+	constructor(
+		fileSystem: IFileSystem,
+		workspace: IWorkspace,
+		pathUtils: IPathUtils,
+		fileWatcher?: IFileWatcher
+	) {
+		this.fileSystem = fileSystem
+		this.workspace = workspace
+		this.pathUtils = pathUtils
 		this.ignoreInstance = ignore()
 		this.rooIgnoreContent = undefined
 		this.fileWatcher = fileWatcher
@@ -45,7 +52,12 @@ export class RooIgnoreController {
 			return
 		}
 
-		const rooignorePath = path.join(this.cwd, ".rooignore")
+		const rootPath = this.workspace.getRootPath()
+		if (!rootPath) {
+			return
+		}
+
+		const rooignorePath = this.pathUtils.join(rootPath, ".rooignore")
 
 		// Watch for changes to the .rooignore file
 		const cleanup = this.fileWatcher.watchFile(rooignorePath, (event: FileWatchEvent) => {
@@ -63,13 +75,20 @@ export class RooIgnoreController {
 		try {
 			// Reset ignore instance to prevent duplicate patterns
 			this.ignoreInstance = ignore()
-			const ignorePath = path.join(this.cwd, ".rooignore")
-			if (await fileExistsAtPath(ignorePath)) {
-				const content = await fs.readFile(ignorePath, "utf8")
+			const rootPath = this.workspace.getRootPath()
+			if (!rootPath) {
+				this.rooIgnoreContent = undefined
+				return
+			}
+			const ignorePath = this.pathUtils.join(rootPath, ".rooignore")
+			try {
+				const buffer = await this.fileSystem.readFile(ignorePath)
+				const content = new TextDecoder().decode(buffer)
 				this.rooIgnoreContent = content
 				this.ignoreInstance.add(content)
 				this.ignoreInstance.add(".rooignore")
-			} else {
+			} catch (fileError) {
+				// File doesn't exist or can't be read
 				this.rooIgnoreContent = undefined
 			}
 		} catch (error) {
@@ -80,7 +99,7 @@ export class RooIgnoreController {
 
 	/**
 	 * Check if a file should be accessible to the LLM
-	 * @param filePath - Path to check (relative to cwd)
+	 * @param filePath - Path to check (can be absolute or relative)
 	 * @returns true if file is accessible, false if ignored
 	 */
 	validateAccess(filePath: string): boolean {
@@ -89,15 +108,14 @@ export class RooIgnoreController {
 			return true
 		}
 		try {
-			// Normalize path to be relative to cwd and use forward slashes
-			const absolutePath = path.resolve(this.cwd, filePath)
-			const relativePath = path.relative(this.cwd, absolutePath).toPosix()
-
-			// Ignore expects paths to be path.relative()'d
+			// Get relative path using workspace abstraction
+			const relativePath = this.workspace.getRelativePath(filePath)
+			
+			// Ignore expects paths to be relative and use forward slashes
 			return !this.ignoreInstance.ignores(relativePath)
 		} catch (error) {
 			// console.error(`Error validating access for ${filePath}:`, error)
-			// Ignore is designed to work with relative file paths, so will throw error for paths outside cwd. We are allowing access to all files outside cwd.
+			// Ignore is designed to work with relative file paths, so will throw error for paths outside workspace. We are allowing access to all files outside workspace.
 			return true
 		}
 	}
