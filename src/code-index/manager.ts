@@ -1,4 +1,4 @@
-import { VectorStoreSearchResult, SearchFilter } from "./interfaces"
+import { VectorStoreSearchResult, SearchFilter, IVectorStore, IDirectoryScanner } from "./interfaces"
 import { IndexingState, ICodeIndexManager } from "./interfaces/manager"
 import { CodeIndexConfigManager } from "./config-manager"
 import { CodeIndexStateManager } from "./state-manager"
@@ -186,6 +186,9 @@ export class CodeIndexManager implements ICodeIndexManager {
 				embedder,
 				vectorStore,
 			)
+
+			// Add the new reconciliation step
+			await this.reconcileIndex(vectorStore, scanner)
 		}
 
 		// 5. Handle Indexing Start/Restart
@@ -262,6 +265,42 @@ export class CodeIndexManager implements ICodeIndexManager {
 
 	public getCurrentStatus() {
 		return this._stateManager.getCurrentStatus()
+	}
+
+	private async reconcileIndex(vectorStore: IVectorStore, scanner: IDirectoryScanner) {
+		const logger = this.dependencies.logger
+		logger?.info("Reconciling index with filesystem...")
+
+		// 1. Get all file paths from the vector store (these are relative paths)
+		const indexedRelativePaths = await vectorStore.getAllFilePaths()
+		if (indexedRelativePaths.length === 0) {
+			logger?.info("No files found in vector store. Skipping reconciliation.")
+			return
+		}
+
+		// 2. Get all file paths from the local filesystem (these are absolute paths)
+		const localAbsolutePaths = await scanner.getAllFilePaths(this.workspacePath)
+		const localRelativePathSet = new Set(
+			localAbsolutePaths.map((p) => this.dependencies.workspace.getRelativePath(p)),
+		)
+
+		// 3. Determine which files are stale
+		const staleRelativePaths = indexedRelativePaths.filter((p) => !localRelativePathSet.has(p))
+
+		if (staleRelativePaths.length > 0) {
+			logger?.info(`Found ${staleRelativePaths.length} stale files to remove.`)
+
+			// 4. Delete stale entries from vector store (using relative paths)
+			await vectorStore.deletePointsByMultipleFilePaths(staleRelativePaths)
+
+			// 5. Delete stale entries from cache (using absolute paths)
+			const staleAbsolutePaths = staleRelativePaths.map((p) =>
+				this.dependencies.pathUtils.resolve(this.workspacePath, p),
+			)
+			this._cacheManager!.deleteHashes(staleAbsolutePaths)
+		} else {
+			logger?.info("Index is already up-to-date.")
+		}
 	}
 
 	public async searchIndex(query: string, filter?: SearchFilter): Promise<VectorStoreSearchResult[]> {

@@ -96,6 +96,17 @@ export class CacheManager implements ICacheManager {
 	}
 
 	/**
+	 * Deletes multiple hashes by file path
+	 * @param filePaths Array of file paths to delete
+	 */
+	deleteHashes(filePaths: string[]): void {
+		for (const filePath of filePaths) {
+			delete this.fileHashes[filePath]
+		}
+		this._debouncedSaveCache()
+	}
+
+	/**
 	 * Gets a copy of all file hashes
 	 * @returns A copy of the file hashes record
 	 */

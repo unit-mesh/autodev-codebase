@@ -12,7 +12,7 @@ export async function main() {
   }
 
   // console.log('CLI options: ', options);
-  
+
   if (options.mcpServer) {
     // Pure MCP server mode - no TUI interaction to avoid stdin conflicts
     const { startMCPServerMode } = await import('./cli/tui-runner');
@@ -27,7 +27,7 @@ export async function main() {
     const TUIApp = createTUIApp(options);
 
     render(React.createElement(TUIApp), {
-      patchConsole: true, 
+      patchConsole: true,
       debug: false
     });
   }

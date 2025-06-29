@@ -44,6 +44,13 @@ export interface IDirectoryScanner {
 		}
 		totalBlockCount: number
 	}>
+
+	/**
+	 * Gets all file paths in the directory
+	 * @param directoryPath Path to the directory to scan
+	 * @returns Promise resolving to an array of file paths
+	 */
+	getAllFilePaths(directoryPath: string): Promise<string[]>
 }
 
 /**

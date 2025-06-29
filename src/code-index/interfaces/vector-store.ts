@@ -55,6 +55,12 @@ export interface IVectorStore {
 	 * @returns Promise resolving to boolean indicating if the collection exists
 	 */
 	collectionExists(): Promise<boolean>
+
+	/**
+	 * Gets all file paths from the vector store
+	 * @returns Promise resolving to an array of file paths
+	 */
+	getAllFilePaths(): Promise<string[]>
 }
 
 export interface SearchFilter {

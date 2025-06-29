@@ -4,7 +4,7 @@ import * as path from "path"
 import { getWorkspacePath } from "../../utils/path"
 import { IVectorStore, SearchFilter } from "../interfaces/vector-store"
 import { Payload, VectorStoreSearchResult } from "../interfaces"
-import { MAX_SEARCH_RESULTS, SEARCH_MIN_SCORE } from "../constants"
+import { MAX_SEARCH_RESULTS, SEARCH_MIN_SCORE, MAX_LIST_FILES_LIMIT } from "../constants"
 import { match } from "assert"
 
 /**
@@ -92,7 +92,7 @@ export class QdrantVectorStore implements IVectorStore {
 				}
 			}
 
-			
+
 
 			// Create index for filePath to support range queries for directoryPrefix filtering
 			try {
@@ -199,12 +199,12 @@ export class QdrantVectorStore implements IVectorStore {
 						text: pattern.replace(/\\/g, '/'), // Normalize path separators
 					}
 				}))
-				
+
 				qdrantFilter = {
 					should: shouldConditions,
 				}
 			}
-			
+
 			const searchRequest = {
 				query: queryVector,
 				filter: qdrantFilter,
@@ -248,17 +248,11 @@ export class QdrantVectorStore implements IVectorStore {
 		}
 
 		try {
-			const workspaceRoot = getWorkspacePath()
-			const normalizedPaths = filePaths.map((filePath) => {
-				const absolutePath = path.resolve(workspaceRoot, filePath)
-				return path.normalize(absolutePath)
-			})
-
 			const filter = {
-				should: normalizedPaths.map((normalizedPath) => ({
+				should: filePaths.map((filePath) => ({
 					key: "filePath",
 					match: {
-						value: normalizedPath,
+						value: filePath,
 					},
 				})),
 			}
@@ -312,5 +306,37 @@ export class QdrantVectorStore implements IVectorStore {
 	async collectionExists(): Promise<boolean> {
 		const collectionInfo = await this.getCollectionInfo()
 		return collectionInfo !== null
+	}
+
+	async getAllFilePaths(): Promise<string[]> {
+		try {
+			const allFilePaths = new Set<string>()
+			let nextPageOffset: Schemas["ExtendedPointId"] | undefined = undefined
+
+			do {
+				const response: Schemas["ScrollResult"] = await this.client.scroll(this.collectionName, {
+					limit: 250,
+					with_payload: ["filePath"],
+					with_vector: false,
+					offset: nextPageOffset,
+				})
+
+				for (const point of response.points) {
+					if (point.payload?.['filePath'] && typeof point.payload['filePath'] === 'string') {
+						allFilePaths.add(point.payload['filePath'])
+					}
+				}
+
+				nextPageOffset = response.next_page_offset as Schemas["ExtendedPointId"] | undefined
+			} while (nextPageOffset)
+
+			return Array.from(allFilePaths)
+		} catch (error) {
+			console.error("[QdrantVectorStore] Failed to get all file paths:", error)
+			// In case of an error (e.g., collection not found), return an empty array
+			// This prevents the reconciliation process from accidentally deleting everything
+			// if Qdrant is temporarily unavailable.
+			return []
+		}
 	}
 }

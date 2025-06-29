@@ -352,4 +352,39 @@ export class DirectoryScanner implements IDirectoryScanner {
 			onError?.(new Error(errorMessage))
 		}
 	}
+
+	public async getAllFilePaths(directory: string): Promise<string[]> {
+		const directoryPath = directory
+		this.debug(`[Scanner] Getting all file paths for: ${directoryPath}`)
+		// Get all files recursively (handles .gitignore automatically)
+		const [allPaths, _] = await listFiles(directoryPath, true, MAX_LIST_FILES_LIMIT, { pathUtils: this.deps.pathUtils, ripgrepPath: 'rg' })
+		this.debug(`[Scanner] Found ${allPaths.length} paths from listFiles:`)
+
+		// Filter out directories (marked with trailing '/')
+		const filePaths = allPaths.filter((p) => !p.endsWith("/"))
+		this.debug(`[Scanner] After filtering directories: ${filePaths.length} files:`)
+
+		// Filter paths using workspace ignore rules
+		const allowedPaths: string[] = []
+		for (const filePath of filePaths) {
+			const shouldIgnore = await this.deps.workspace.shouldIgnore(filePath)
+			if (!shouldIgnore) {
+				allowedPaths.push(filePath)
+			}
+		}
+		this.debug(`[Scanner] After workspace ignore rules: ${allowedPaths.length} files:`)
+
+		// Filter by supported extensions and ignore patterns
+		const supportedPaths = allowedPaths.filter((filePath) => {
+			const ext = this.deps.pathUtils.extname(filePath).toLowerCase()
+			const relativeFilePath = this.deps.workspace.getRelativePath(filePath)
+			const extSupported = scannerExtensions.includes(ext)
+			const ignoreInstanceIgnores = this.deps.ignoreInstance.ignores(relativeFilePath)
+
+			return extSupported && !ignoreInstanceIgnores
+		})
+		this.debug(`[Scanner] After extension and ignore filtering: ${supportedPaths.length} files:`)
+
+		return supportedPaths
+	}
 }
