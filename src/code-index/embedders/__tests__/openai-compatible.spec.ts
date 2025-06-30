@@ -14,9 +14,9 @@ describe("OpenAICompatibleEmbedder", () => {
 	let mockOpenAIInstance: any
 	let mockEmbeddingsCreate: MockedFunction<any>
 
-	const testBaseUrl = "https://api.example.com/v1"
-	const testApiKey = "test-api-key"
-	const testModelId = "text-embedding-3-small"
+	const testBaseUrl = "https://api.siliconflow.cn/v1"
+	const testApiKey = "sk-ughiikqkayqxxwxfflddywnssdesczoggpdqjngfuojrcabd"
+	const testModelId = "Qwen/Qwen3-Embedding-4B"
 
 	beforeEach(() => {
 		vitest.clearAllMocks()

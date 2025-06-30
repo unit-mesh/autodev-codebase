@@ -24,6 +24,7 @@ const DIRS_TO_IGNORE = [
 	"pkg",
 	"Pods",
 	".*",
+	".autodev-cache"
 ]
 
 export interface ListFilesDependencies {
@@ -58,10 +59,9 @@ export async function listFiles(
 	if (!rgPath) {
 		throw new Error("Ripgrep path not provided. Please provide ripgrepPath in dependencies.")
 	}
-
 	// Get files using ripgrep
 	const files = await listFilesWithRipgrep(rgPath, dirPath, recursive, limit, deps.pathUtils)
-
+	// console.log(`[listFiles] Found ${files.length} files in ${dirPath} (recursive: ${recursive})`)
 	// Get directories with proper filtering
 	const gitignorePatterns = await parseGitignoreFile(dirPath, recursive, deps.pathUtils)
 	const directories = await listFilteredDirectories(dirPath, recursive, gitignorePatterns, deps.pathUtils)

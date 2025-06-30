@@ -4,8 +4,8 @@ import http from 'http';
 const config = {
     host: 'localhost',
     port: 6333,
-    collection: 'ws-ee8695fbfd3bb153',
-    endpoint: '/collections/ws-ee8695fbfd3bb153/points/scroll'
+    collection: 'ws-d7947ff78f9f219d',
+    endpoint: '/collections/ws-d7947ff78f9f219d/points/scroll'
 };
 
 /**
@@ -65,24 +65,24 @@ function formatQdrantResults(points, query = '') {
             const current = results[i];
             const currentStart = current.payload?.startLine || 0;
             const currentEnd = current.payload?.endLine || 0;
-            
+
             // 检查当前片段是否被其他片段包含
             let isContained = false;
             for (let j = 0; j < results.length; j++) {
                 if (i === j) continue; // 跳过自己
-                
+
                 const other = results[j];
                 const otherStart = other.payload?.startLine || 0;
                 const otherEnd = other.payload?.endLine || 0;
-                
+
                 // 如果当前片段被其他片段完全包含，则标记为重复
-                if (otherStart <= currentStart && otherEnd >= currentEnd && 
+                if (otherStart <= currentStart && otherEnd >= currentEnd &&
                     !(otherStart === currentStart && otherEnd === currentEnd)) {
                     isContained = true;
                     break;
                 }
             }
-            
+
             // 如果没有被包含，则保留这个片段
             if (!isContained) {
                 deduplicatedResults.push(current);
@@ -90,12 +90,10 @@ function formatQdrantResults(points, query = '') {
         }
 
         // 使用去重后的结果计算平均分数
-        const avgScore = deduplicatedResults.length > 0 
+        const avgScore = deduplicatedResults.length > 0
             ? deduplicatedResults.reduce((sum, r) => sum + (r.score || 0), 0) / deduplicatedResults.length
             : 0;
-        console.log(`平均分数: ${avgScore.toFixed(3)}`, deduplicatedResults.map(r => ({
-            score: r.score
-        })));
+        console.log(`平均分数: ${avgScore.toFixed(3)}`, deduplicatedResults.map(r => (r.score)));
 
         // 合并代码片段，优化显示格式（使用去重后的结果）
         const codeChunks = deduplicatedResults.map((result, index) => {
@@ -112,8 +110,8 @@ ${codeChunk}`;
         }).join('\n' + '─'.repeat(5) + '\n');
 
         const snippetInfo = deduplicatedResults.length > 1 ? ` | ${deduplicatedResults.length} snippets` : '';
-        const duplicateInfo = results.length !== deduplicatedResults.length 
-            ? ` (${results.length - deduplicatedResults.length} duplicates removed)` 
+        const duplicateInfo = results.length !== deduplicatedResults.length
+            ? ` (${results.length - deduplicatedResults.length} duplicates removed)`
             : '';
         return `File: \`${filePath}\` | Avg Score: ${avgScore.toFixed(3)}${snippetInfo}${duplicateInfo}
 \`\`\`
@@ -164,20 +162,20 @@ function makeQdrantRequest() {
 
     // 请求体 - 滚动查询所有点
     const requestBody = JSON.stringify({
-        limit: 200,  // 限制返回10个点
-        with_payload: true,  // 包含payload
-        with_vector: false,   // 不包含向量数据（通常很大）
-        "query": "CodeIndexManager",
-        "filter": {
-            "should": [
-                {
-                    "key": "filePath",
-                    "match": {
-                        "text": "src/examples/tui/SearchInterface.tsx"
-                    }
-                }
-            ]
-        }
+        limit: 1000,  // 限制返回10个点
+        // with_payload: true,  // 包含payload
+        // with_vector: false,   // 不包含向量数据（通常很大）
+        // "query": "",
+        // "filter": {
+        //     "should": [
+        //         {
+        //             "key": "filePath",
+        //             "match": {
+        //                 "text": "package"
+        //             }
+        //         }
+        //     ]
+        // }
     });
     console.log('请求体:', requestBody);
 
@@ -194,8 +192,8 @@ function makeQdrantRequest() {
         res.on('end', () => {
             try {
                 const response = JSON.parse(data);
-                console.log('\n=== Qdrant 原始响应数据 ===');
-                console.log(data);
+                // console.log('\n=== Qdrant 原始响应数据 ===');
+                // console.log(data);
 
                 if (response.result && response.result.points) {
                     console.log(`\n找到 ${response.result.points.length} 个点`);

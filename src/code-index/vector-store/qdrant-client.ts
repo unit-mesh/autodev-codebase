@@ -332,7 +332,7 @@ export class QdrantVectorStore implements IVectorStore {
 
 			return Array.from(allFilePaths)
 		} catch (error) {
-			console.error("[QdrantVectorStore] Failed to get all file paths:", error)
+			// console.error("[QdrantVectorStore] Failed to get all file paths:", error)
 			// In case of an error (e.g., collection not found), return an empty array
 			// This prevents the reconciliation process from accidentally deleting everything
 			// if Qdrant is temporarily unavailable.
