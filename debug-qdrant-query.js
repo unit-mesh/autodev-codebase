@@ -101,11 +101,13 @@ function formatQdrantResults(points, query = '') {
             const startLine = result.payload?.startLine;
             const endLine = result.payload?.endLine;
             const lineInfo = (startLine !== undefined && endLine !== undefined)
-                ? ` (L${startLine}-${endLine})`
+                ? `(L${startLine}-${endLine})`
                 : '';
+            const hierarchyInfo = result.payload?.hierarchyDisplay ? `< ${result.payload?.hierarchyDisplay} > `
+            : '';
             const score = result.score?.toFixed(3) || '1.000';
 
-            return `${lineInfo}
+            return `${hierarchyInfo}${lineInfo}
 ${codeChunk}`;
         }).join('\n' + '─'.repeat(5) + '\n');
 
@@ -192,8 +194,8 @@ function makeQdrantRequest() {
         res.on('end', () => {
             try {
                 const response = JSON.parse(data);
-                // console.log('\n=== Qdrant 原始响应数据 ===');
-                // console.log(data);
+                console.log('\n=== Qdrant 原始响应数据 ===');
+                console.log(data);
 
                 if (response.result && response.result.points) {
                     console.log(`\n找到 ${response.result.points.length} 个点`);

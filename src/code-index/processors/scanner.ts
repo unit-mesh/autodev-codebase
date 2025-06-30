@@ -319,6 +319,8 @@ export class DirectoryScanner implements IDirectoryScanner {
 						chunkSource: block.chunkSource,
 						type: block.type,
 						identifier: block.identifier,
+						parentChain: block.parentChain,
+						hierarchyDisplay: block.hierarchyDisplay,
 					},
 				}
 			},

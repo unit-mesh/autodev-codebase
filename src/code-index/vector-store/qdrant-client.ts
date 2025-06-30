@@ -214,9 +214,7 @@ export class QdrantVectorStore implements IVectorStore {
 					hnsw_ef: 128,
 					exact: false,
 				},
-				with_payload: {
-					include: ["filePath", "codeChunk", "startLine", "endLine", "pathSegments"],
-				},
+				with_payload: true,
 			}
 			console.log("🔍[QdrantVectorStore] Search request:", JSON.stringify({...searchRequest, query:"[query vector]"}))
 

@@ -3,7 +3,7 @@ import { createHash } from "crypto"
 import * as path from "path"
 import * as treeSitter from "web-tree-sitter"
 import { LanguageParser, loadRequiredLanguageParsers } from "../../tree-sitter/languageParser"
-import { ICodeParser, CodeBlock } from "../interfaces"
+import { ICodeParser, CodeBlock, ParentContainer } from "../interfaces"
 import { scannerExtensions } from "../shared/supported-extensions"
 import { MAX_BLOCK_CHARS, MIN_BLOCK_CHARS, MIN_CHUNK_REMAINDER_CHARS, MAX_CHARS_TOLERANCE_FACTOR } from "../constants"
 
@@ -203,6 +203,11 @@ export class CodeParser implements ICodeParser {
 
 					if (!seenSegmentHashes.has(segmentHash)) {
 						seenSegmentHashes.add(segmentHash)
+						
+						// Build parent chain and hierarchy display
+						const parentChain = this.buildParentChain(currentNode, nodeIdentifierMap)
+						const hierarchyDisplay = this.buildHierarchyDisplay(parentChain, identifier, type)
+						
 						results.push({
 							file_path: filePath,
 							identifier,
@@ -213,6 +218,8 @@ export class CodeParser implements ICodeParser {
 							segmentHash,
 							fileHash,
 							chunkSource: 'tree-sitter',
+							parentChain,
+							hierarchyDisplay,
 						})
 					}
 				}
@@ -262,6 +269,8 @@ export class CodeParser implements ICodeParser {
 						segmentHash,
 						fileHash,
 						chunkSource: 'fallback',
+						parentChain: [], // No parent chain for fallback chunks
+						hierarchyDisplay: null,
 					})
 				}
 			}
@@ -287,6 +296,8 @@ export class CodeParser implements ICodeParser {
 					segmentHash,
 					fileHash,
 					chunkSource: 'line-segment',
+					parentChain: [], // No parent chain for line segments
+					hierarchyDisplay: null,
 				})
 			}
 		}
@@ -419,6 +430,151 @@ export class CodeParser implements ICodeParser {
 			}
 		}
 		return result
+	}
+
+	/**
+	 * Builds the parent chain for a given tree-sitter node
+	 */
+	private buildParentChain(node: treeSitter.SyntaxNode, nodeIdentifierMap: Map<treeSitter.SyntaxNode, string>): ParentContainer[] {
+		const parentChain: ParentContainer[] = []
+		
+		// Container node types that we want to track in the hierarchy
+		const containerTypes = new Set([
+			'class_declaration', 'class_definition',
+			'interface_declaration', 'interface_definition',
+			'namespace_declaration', 'namespace_definition',
+			'module_declaration', 'module_definition',
+			'function_declaration', 'function_definition', 'method_definition',
+			'object_expression', 'object_pattern',
+			'object', 'pair', // JSON objects and properties
+			'program', 'source_file'
+		])
+		
+		let currentNode = node.parent
+		while (currentNode) {
+			// Skip non-container nodes
+			if (!containerTypes.has(currentNode.type)) {
+				currentNode = currentNode.parent
+				continue
+			}
+			
+			// Skip program/source_file as they're too generic
+			if (currentNode.type === 'program' || currentNode.type === 'source_file') {
+				currentNode = currentNode.parent
+				continue
+			}
+			
+			// Try to get identifier from various sources
+			let identifier = nodeIdentifierMap.get(currentNode) || null
+			
+			if (!identifier) {
+				// Try to extract identifier from the node structure
+				identifier = this.extractNodeIdentifier(currentNode)
+			}
+			
+			// Only add to chain if we found a meaningful identifier
+			if (identifier) {
+				parentChain.unshift({ // Add to beginning to maintain correct order
+					identifier: identifier,
+					type: this.normalizeNodeType(currentNode.type)
+				})
+			}
+			
+			currentNode = currentNode.parent
+		}
+		
+		return parentChain
+	}
+	
+	/**
+	 * Extracts identifier from a tree-sitter node using various strategies
+	 */
+	private extractNodeIdentifier(node: treeSitter.SyntaxNode): string | null {
+		// Try field-based extraction first
+		const nameField = node.childForFieldName("name")
+		if (nameField) {
+			let name = nameField.text
+			// Remove quotes from JSON properties
+			if (name.startsWith('"') && name.endsWith('"')) {
+				name = name.slice(1, -1)
+			}
+			return name
+		}
+		
+		// Try to find identifier child nodes
+		const identifierChild = node.children?.find(child => 
+			child.type === "identifier" || 
+			child.type === "type_identifier" ||
+			child.type === "property_identifier"
+		)
+		if (identifierChild) {
+			let name = identifierChild.text
+			// Remove quotes from JSON properties
+			if (name.startsWith('"') && name.endsWith('"')) {
+				name = name.slice(1, -1)
+			}
+			return name
+		}
+		
+		// For JSON pairs, try to get the key
+		if (node.type === 'pair' && node.children && node.children.length > 0) {
+			const key = node.children[0]
+			if (key) {
+				let name = key.text
+				// Remove quotes from JSON keys
+				if (name.startsWith('"') && name.endsWith('"')) {
+					name = name.slice(1, -1)
+				}
+				return name
+			}
+		}
+		
+		return null
+	}
+	
+	/**
+	 * Normalizes node types to more readable format
+	 */
+	private normalizeNodeType(nodeType: string): string {
+		const typeMap: Record<string, string> = {
+			'class_declaration': 'class',
+			'class_definition': 'class',
+			'interface_declaration': 'interface',
+			'interface_definition': 'interface',
+			'namespace_declaration': 'namespace',
+			'namespace_definition': 'namespace',
+			'module_declaration': 'module',
+			'module_definition': 'module',
+			'function_declaration': 'function',
+			'function_definition': 'function',
+			'method_definition': 'method',
+			'object_expression': 'object',
+			'object_pattern': 'object',
+			'object': 'object',
+			'pair': 'property'
+		}
+		
+		return typeMap[nodeType] || nodeType
+	}
+	
+	/**
+	 * Builds hierarchy display string from parent chain
+	 */
+	private buildHierarchyDisplay(parentChain: ParentContainer[], currentIdentifier: string | null, currentType: string): string | null {
+		const parts: string[] = []
+		
+		// Add parent parts
+		for (const parent of parentChain) {
+			parts.push(`${parent.type} ${parent.identifier}`)
+		}
+		
+		// Add current node if it has an identifier
+		if (currentIdentifier) {
+			const normalizedCurrentType = this.normalizeNodeType(currentType)
+			parts.push(`${normalizedCurrentType} ${currentIdentifier}`)
+		}
+		
+		return parts.length > 0 ? parts.join(' > ') : null
 	}
 
 	/**

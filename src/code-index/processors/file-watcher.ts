@@ -322,6 +322,8 @@ export class FileWatcher implements ICodeFileWatcher {
 							chunkSource: block.chunkSource,
 							type: block.type,
 							identifier: block.identifier,
+							parentChain: block.parentChain,
+							hierarchyDisplay: block.hierarchyDisplay,
 						},
 					}
 				},

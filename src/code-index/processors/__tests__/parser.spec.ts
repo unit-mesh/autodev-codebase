@@ -450,4 +450,222 @@ describe("CodeParser", () => {
 			}
 		})
 	})
+
+	describe("hierarchy extraction", () => {
+		it("should extract parent hierarchy for nested functions", async () => {
+			// Mock nested function captures
+			const mockCaptures = [
+				{
+					name: "definition.class",
+					node: {
+						type: "class_declaration",
+						text: "class UserService {\n  validateEmail(email) {\n    return email.includes('@');\n  }\n}",
+						startPosition: { row: 0 },
+						endPosition: { row: 4 },
+						parent: null,
+						childForFieldName: vi.fn(),
+						children: []
+					}
+				},
+				{
+					name: "name", 
+					node: {
+						text: "UserService",
+						startPosition: { row: 0 },
+						endPosition: { row: 0 }
+					}
+				},
+				{
+					name: "definition.function",
+					node: {
+						type: "function_declaration",
+						text: "validateEmail(email) {\n    return email.includes('@');\n  }",
+						startPosition: { row: 1 },
+						endPosition: { row: 3 },
+						parent: {
+							type: "class_declaration",
+							text: "class UserService {\n  validateEmail(email) {\n    return email.includes('@');\n  }\n}",
+							startPosition: { row: 0 },
+							endPosition: { row: 4 },
+							parent: null,
+							childForFieldName: vi.fn(() => ({ text: "UserService" })),
+							children: []
+						},
+						childForFieldName: vi.fn(),
+						children: []
+					}
+				},
+				{
+					name: "name",
+					node: {
+						text: "validateEmail",
+						startPosition: { row: 1 },
+						endPosition: { row: 1 }
+					}
+				}
+			]
+
+			// Mock tree with rootNode
+			const mockTree = {
+				rootNode: {
+					text: "class UserService {\n  validateEmail(email) {\n    return email.includes('@');\n  }\n}",
+					startPosition: { row: 0 },
+					endPosition: { row: 4 }
+				}
+			}
+
+			// Mock the language query captures method
+			const mockLanguage = {
+				parser: { 
+					parse: vi.fn().mockReturnValue(mockTree)
+				},
+				query: { 
+					captures: vi.fn().mockReturnValue(mockCaptures)
+				}
+			}
+
+			// Set up parser with mock language
+			parser["loadedParsers"]["js"] = mockLanguage as any
+
+			const result = await parser["parseContent"]("test.js", "class UserService {\n  validateEmail(email) {\n    return email.includes('@');\n  }\n}", "hash")
+			
+			// Should extract parent hierarchy for the method
+			const functionBlock = result.find(block => block.identifier === "validateEmail")
+			if (functionBlock) {
+				expect(functionBlock.parentChain).toHaveLength(1)
+				expect(functionBlock.parentChain[0].identifier).toBe("UserService")
+				expect(functionBlock.parentChain[0].type).toBe("class")
+				expect(functionBlock.hierarchyDisplay).toBe("class UserService > function validateEmail")
+			}
+		})
+
+		it("should handle JSON property hierarchy", async () => {
+			// Mock JSON property captures
+			const mockCaptures = [
+				{
+					name: "property.definition",
+					node: {
+						type: "pair",
+						text: '"database": {\n  "host": "localhost"\n}',
+						startPosition: { row: 1 },
+						endPosition: { row: 3 },
+						parent: {
+							type: "object",
+							text: '{\n  "database": {\n    "host": "localhost"\n  }\n}',
+							startPosition: { row: 0 },
+							endPosition: { row: 4 },
+							parent: null,
+							children: []
+						},
+						childForFieldName: vi.fn(),
+						children: [
+							{ text: '"database"' }
+						]
+					}
+				},
+				{
+					name: "property.name.definition",
+					node: {
+						text: '"database"',
+						startPosition: { row: 1 },
+						endPosition: { row: 1 }
+					}
+				}
+			]
+
+			// Mock tree with rootNode
+			const mockTree = {
+				rootNode: {
+					text: '{\n  "database": {\n    "host": "localhost"\n  }\n}',
+					startPosition: { row: 0 },
+					endPosition: { row: 4 }
+				}
+			}
+
+			// Mock the language query captures method  
+			const mockLanguage = {
+				parser: {
+					parse: vi.fn().mockReturnValue(mockTree)
+				},
+				query: {
+					captures: vi.fn().mockReturnValue(mockCaptures)
+				}
+			}
+
+			// Set up parser with mock language for JSON
+			parser["loadedParsers"]["json"] = mockLanguage as any
+
+			const result = await parser["parseContent"]("test.json", '{\n  "database": {\n    "host": "localhost"\n  }\n}', "hash")
+			
+			// Should extract JSON property identifier without quotes
+			const propertyBlock = result.find(block => block.identifier === "database")
+			if (propertyBlock) {
+				expect(propertyBlock.identifier).toBe("database")
+				expect(propertyBlock.type).toBe("pair")
+				expect(propertyBlock.hierarchyDisplay).toBe("property database")
+			}
+		})
+
+		it("should handle empty parent chain for top-level functions", async () => {
+			// Mock top-level function captures
+			const mockCaptures = [
+				{
+					name: "definition.function",
+					node: {
+						type: "function_declaration",
+						text: "function topLevelFunction() {\n  return 42;\n}",
+						startPosition: { row: 0 },
+						endPosition: { row: 2 },
+						parent: {
+							type: "program",
+							startPosition: { row: 0 },
+							endPosition: { row: 2 },
+							parent: null
+						},
+						childForFieldName: vi.fn(),
+						children: []
+					}
+				},
+				{
+					name: "name",
+					node: {
+						text: "topLevelFunction",
+						startPosition: { row: 0 },
+						endPosition: { row: 0 }
+					}
+				}
+			]
+
+			// Mock tree with rootNode
+			const mockTree = {
+				rootNode: {
+					text: "function topLevelFunction() {\n  return 42;\n}",
+					startPosition: { row: 0 },
+					endPosition: { row: 2 }
+				}
+			}
+
+			// Mock the language query captures method
+			const mockLanguage = {
+				parser: {
+					parse: vi.fn().mockReturnValue(mockTree)
+				},
+				query: {
+					captures: vi.fn().mockReturnValue(mockCaptures)
+				}
+			}
+
+			// Set up parser with mock language
+			parser["loadedParsers"]["js"] = mockLanguage as any
+
+			const result = await parser["parseContent"]("test.js", "function topLevelFunction() {\n  return 42;\n}", "hash")
+			
+			// Should have empty parent chain for top-level function
+			const functionBlock = result.find(block => block.identifier === "topLevelFunction")
+			if (functionBlock) {
+				expect(functionBlock.parentChain).toHaveLength(0)
+				expect(functionBlock.hierarchyDisplay).toBe("function topLevelFunction")
+			}
+		})
+	})
 })

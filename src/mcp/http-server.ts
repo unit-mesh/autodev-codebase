@@ -156,24 +156,24 @@ export class CodebaseHTTPMCPServer {
                     const current = results[i];
                     const currentStart = current.payload?.startLine || 0;
                     const currentEnd = current.payload?.endLine || 0;
-                    
+
                     // 检查当前片段是否被其他片段包含
                     let isContained = false;
                     for (let j = 0; j < results.length; j++) {
                         if (i === j) continue; // 跳过自己
-                        
+
                         const other = results[j];
                         const otherStart = other.payload?.startLine || 0;
                         const otherEnd = other.payload?.endLine || 0;
-                        
+
                         // 如果当前片段被其他片段完全包含，则标记为重复
-                        if (otherStart <= currentStart && otherEnd >= currentEnd && 
+                        if (otherStart <= currentStart && otherEnd >= currentEnd &&
                             !(otherStart === currentStart && otherEnd === currentEnd)) {
                             isContained = true;
                             break;
                         }
                     }
-                    
+
                     // 如果没有被包含，则保留这个片段
                     if (!isContained) {
                         deduplicatedResults.push(current);
@@ -181,27 +181,28 @@ export class CodebaseHTTPMCPServer {
                 }
 
                 // 使用去重后的结果计算平均分数
-                const avgScore = deduplicatedResults.length > 0 
+                const avgScore = deduplicatedResults.length > 0
                     ? deduplicatedResults.reduce((sum, r) => sum + (r.score || 0), 0) / deduplicatedResults.length
                     : 0;
-                
+
                 // 合并代码片段，优化显示格式
                 const codeChunks = deduplicatedResults.map((result: any, index: number) => {
                     const codeChunk = result.payload?.codeChunk || 'No content available';
                     const startLine = result.payload?.startLine;
                     const endLine = result.payload?.endLine;
                     const lineInfo = (startLine !== undefined && endLine !== undefined)
-                        ? ` (L${startLine}-${endLine})`
+                        ? `(L${startLine}-${endLine})`
                         : '';
-                    const score = result.score?.toFixed(3) || '0.000';
-                    
-                    return `${lineInfo}
+                    const hierarchyInfo = result.payload?.hierarchyDisplay ? `< ${result.payload?.hierarchyDisplay} > `
+                    : '';
+                    const score = result.score?.toFixed(3) || '1.000';
+                    return `${hierarchyInfo}${lineInfo}
 ${codeChunk}`;
                 }).join('\n' + '─'.repeat(5) + '\n');
 
                 const snippetInfo = deduplicatedResults.length > 1 ? ` | ${deduplicatedResults.length} snippets` : '';
-                const duplicateInfo = results.length !== deduplicatedResults.length 
-                    ? ` (${results.length - deduplicatedResults.length} duplicates removed)` 
+                const duplicateInfo = results.length !== deduplicatedResults.length
+                    ? ` (${results.length - deduplicatedResults.length} duplicates removed)`
                     : '';
                 return `File: \`${filePath}\` | Avg Score: ${avgScore.toFixed(3)}${snippetInfo}${duplicateInfo}
 \`\`\`
@@ -307,13 +308,13 @@ Note: Configuration changes will apply to subsequent searches.
 
     private setupHTTPServer() {
         const app = express();
-        
+
         // Minimal CORS - only if needed
         app.use((req: any, res: any, next: any) => {
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
             res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-            
+
             if (req.method === 'OPTIONS') {
                 res.writeHead(200);
                 res.end();
@@ -328,15 +329,15 @@ Note: Configuration changes will apply to subsequent searches.
         app.get('/sse', async (_req: Request, res: Response) => {
             const sessionId = this.generateSessionId();
             transport = new SSEServerTransport('/messages', res);
-            
+
             // Track the transport for proper cleanup
             this.sseTransports.set(sessionId, transport);
-            
+
             // Clean up when connection closes
             res.on('close', () => {
                 this.sseTransports.delete(sessionId);
             });
-            
+
             await this.mcpServer.connect(transport);
         });
 
@@ -376,7 +377,7 @@ Note: Configuration changes will apply to subsequent searches.
         <h1>🔍 Codebase MCP Server</h1>
         <p>Status: <strong style="color: green;">Running</strong></p>
         <p>Workspace: <code>${this.codeIndexManager.workspacePathValue}</code></p>
-        
+
         <h2>Endpoints</h2>
         <ul>
             <li><code>GET /sse</code> - SSE connection endpoint</li>
@@ -415,7 +416,7 @@ Note: Configuration changes will apply to subsequent searches.
     async stop(): Promise<void> {
         return new Promise((resolve) => {
             let resolved = false;
-            
+
             const cleanup = () => {
                 if (!resolved) {
                     resolved = true;
@@ -457,7 +458,7 @@ Note: Configuration changes will apply to subsequent searches.
 
                 // Force close all connections
                 this.httpServer.closeAllConnections?.();
-                
+
             } catch (error) {
                 clearTimeout(forceExitTimer);
                 console.warn('Error during shutdown:', error);

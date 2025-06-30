@@ -116,6 +116,11 @@ export interface FileProcessingResult {
  * Common types used across the code-index service
  */
 
+export interface ParentContainer {
+	identifier: string
+	type: string
+}
+
 export interface CodeBlock {
 	file_path: string
 	identifier: string | null
@@ -126,4 +131,6 @@ export interface CodeBlock {
 	fileHash: string
 	segmentHash: string
 	chunkSource: 'tree-sitter' | 'fallback' | 'line-segment'
+	parentChain: ParentContainer[]
+	hierarchyDisplay: string | null
 }
