@@ -338,10 +338,15 @@ export class FileWatcher implements ICodeFileWatcher {
 								return fileInfo && !fileInfo.isNew // Only modified files (not new)
 							})
 					))
-					// Convert all paths to relative paths for deletion
+					// Convert all paths to relative paths for vector store deletion
 					const relativeDeletePaths = filesToDelete.map(path => this.workspace.getRelativePath(path))
 					const relativeUpdatePaths = uniqueFilePaths.map(path => this.workspace.getRelativePath(path))
 					return [...relativeDeletePaths, ...relativeUpdatePaths]
+				},
+
+				// Path converter for cache deletion (relative -> absolute)
+				relativeCachePathToAbsolute: (relativePath: string) => {
+					return this.pathUtils.resolve(this.workspacePath, relativePath)
 				},
 
 				onProgress: (processed, total) => {

@@ -47,15 +47,15 @@ export class CodebaseHTTPMCPServer {
             'Search the codebase using semantic vector search to find relevant code snippets, functions, and documentation.',
             {
                 query: z.string().describe('The search query to find relevant code'),
-                limit: z.number().optional().default(20).describe('Maximum number of results to return (default: 20)'),
+                limit: z.number().optional().default(20).describe('Maximum number of results to return (default: 10)'),
                 filters: z.object({
                     pathFilters: z.array(z.string()).optional().describe('Filter by path strings - directories, extensions, file names, Case sensitive (e.g., ["src/", ".ts", "components"])'),
                     minScore: z.number().optional().describe('Minimum similarity score threshold (0-1)，default 0.4')
                 }).optional().describe('Optional filters for file types, paths, etc.')
             },
-            async ({ query, limit = 20, filters }): Promise<CallToolResult> => {
+            async ({ query, limit = 10, filters }): Promise<CallToolResult> => {
                 if (limit === 0) {
-                    limit = 20; // Default limit if not provided
+                    limit = 10; // Default limit if not provided
                 }
                 if (!query || !query.trim() || typeof query !== 'string') {
                     throw new Error('Query parameter is required and must be a string');

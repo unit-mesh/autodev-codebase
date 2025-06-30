@@ -30,6 +30,8 @@ export interface BatchProcessorOptions<T> {
 	
 	// Optional file deletion logic
 	getFilesToDelete?: (items: T[]) => string[]
+	// Optional path conversion for cache deletion (relative -> absolute)
+	relativeCachePathToAbsolute?: (relativePath: string) => string
 }
 
 /**
@@ -87,7 +89,10 @@ export class BatchProcessor<T> {
 			
 			// Clear cache for deleted files and record successful deletions
 			for (const filePath of filesToDelete) {
-				options.cacheManager.deleteHash(filePath)
+				// Convert relative path to absolute path for cache deletion if converter is provided
+				const cacheFilePath = options.relativeCachePathToAbsolute ? 
+					options.relativeCachePathToAbsolute(filePath) : filePath
+				options.cacheManager.deleteHash(cacheFilePath)
 				result.processedFiles.push({
 					path: filePath,
 					status: "success"
