@@ -35,7 +35,22 @@ ollama serve
 ollama pull nomic-embed-text
 ```
 
-### 2. Install and Start Qdrant
+### 2. Install ripgrep
+
+`ripgrep` is required for fast codebase indexing. Install it with:
+
+```bash
+# Install ripgrep (macOS)
+brew install ripgrep
+
+# Or on Ubuntu/Debian
+sudo apt-get install ripgrep
+
+# Or on Arch Linux
+sudo pacman -S ripgrep
+```
+
+### 3. Install and Start Qdrant
 
 Start Qdrant using Docker:
 
@@ -53,7 +68,7 @@ tar -xzf qdrant-x86_64-unknown-linux-gnu.tar.gz
 ./qdrant
 ```
 
-### 3. Verify Services Are Running
+### 4. Verify Services Are Running
 
 ```bash
 # Check Ollama
@@ -62,7 +77,7 @@ curl http://localhost:11434/api/tags
 # Check Qdrant
 curl http://localhost:6333/collections
 ```
-### 4. Install Autodev-codebase
+### 5. Install Autodev-codebase
 
 ```bash
 npm install -g @autodev/codebase
