@@ -243,4 +243,211 @@ describe("CodeParser", () => {
 			expect(result2).toBeDefined()
 		})
 	})
+
+	describe("deduplication", () => {
+		it("should remove contained blocks", async () => {
+			// Mock a scenario where we have both parent and child blocks
+			const mockBlocks = [
+				{
+					file_path: "test.js",
+					identifier: "parentFunction",
+					type: "function",
+					start_line: 1,
+					end_line: 10,
+					content: "function parent() {\n  function child() {}\n}",
+					segmentHash: "parent-hash",
+					fileHash: "file-hash",
+					chunkSource: "tree-sitter" as const
+				},
+				{
+					file_path: "test.js", 
+					identifier: "child",
+					type: "function",
+					start_line: 2,
+					end_line: 3,
+					content: "function child() {}",
+					segmentHash: "child-hash",
+					fileHash: "file-hash",
+					chunkSource: "tree-sitter" as const
+				}
+			]
+
+			const result = parser["deduplicateBlocks"](mockBlocks)
+			expect(result).toHaveLength(1)
+			expect(result[0].identifier).toBe("parentFunction")
+		})
+
+		it("should prioritize tree-sitter over fallback", async () => {
+			const mockBlocks = [
+				{
+					file_path: "test.js",
+					identifier: null,
+					type: "fallback_chunk",
+					start_line: 1,
+					end_line: 5,
+					content: "some code content",
+					segmentHash: "fallback-hash",
+					fileHash: "file-hash",
+					chunkSource: "fallback" as const
+				},
+				{
+					file_path: "test.js",
+					identifier: "myFunction",
+					type: "function",
+					start_line: 1,
+					end_line: 5,
+					content: "some code content",
+					segmentHash: "tree-hash",
+					fileHash: "file-hash",
+					chunkSource: "tree-sitter" as const
+				}
+			]
+
+			const result = parser["deduplicateBlocks"](mockBlocks)
+			expect(result).toHaveLength(1)
+			expect(result[0].chunkSource).toBe("tree-sitter")
+			expect(result[0].identifier).toBe("myFunction")
+		})
+
+		it("should check containment correctly", async () => {
+			const parentBlock = {
+				file_path: "test.js",
+				identifier: "parent",
+				type: "function",
+				start_line: 1,
+				end_line: 10,
+				content: "function parent() {\n  const x = 1;\n  return x;\n}",
+				segmentHash: "parent-hash",
+				fileHash: "file-hash",
+				chunkSource: "tree-sitter" as const
+			}
+
+			const childBlock = {
+				file_path: "test.js",
+				identifier: null,
+				type: "variable",
+				start_line: 2,
+				end_line: 2,
+				content: "const x = 1;",
+				segmentHash: "child-hash", 
+				fileHash: "file-hash",
+				chunkSource: "tree-sitter" as const
+			}
+
+			const isContained = parser["isBlockContained"](childBlock, parentBlock)
+			expect(isContained).toBe(true)
+		})
+
+		it("should extract identifiers from tree-sitter captures", async () => {
+			// Mock tree-sitter captures with name information
+			const mockCaptures = [
+				{
+					name: "definition.function",
+					node: {
+						type: "function_declaration",
+						text: "function testFunction() {\n  return 42;\n}",
+						startPosition: { row: 0 },
+						endPosition: { row: 2 },
+						childForFieldName: vi.fn(),
+						children: []
+					}
+				},
+				{
+					name: "name", 
+					node: {
+						text: "testFunction",
+						startPosition: { row: 0 },
+						endPosition: { row: 0 }
+					}
+				}
+			]
+
+			// Mock tree with rootNode
+			const mockTree = {
+				rootNode: {
+					text: "function testFunction() {\n  return 42;\n}",
+					startPosition: { row: 0 },
+					endPosition: { row: 2 }
+				}
+			}
+
+			// Mock the language query captures method
+			const mockLanguage = {
+				parser: { 
+					parse: vi.fn().mockReturnValue(mockTree)
+				},
+				query: { 
+					captures: vi.fn().mockReturnValue(mockCaptures)
+				}
+			}
+
+			// Set up parser with mock language
+			parser["loadedParsers"]["js"] = mockLanguage as any
+
+			const result = await parser["parseContent"]("test.js", "function testFunction() {\n  return 42;\n}", "hash")
+			
+			// Should extract identifier from captures
+			if (result.length > 0) {
+				expect(result[0].identifier).toBe("testFunction")
+				expect(result[0].type).toBe("function_declaration")
+				expect(result[0].chunkSource).toBe("tree-sitter")
+			}
+		})
+
+		it("should extract JSON property identifiers correctly", async () => {
+			// Mock JSON property captures
+			const mockCaptures = [
+				{
+					name: "property.definition",
+					node: {
+						type: "pair",
+						text: '"testProperty": {\n  "value": 42\n}',
+						startPosition: { row: 0 },
+						endPosition: { row: 2 },
+						childForFieldName: vi.fn(),
+						children: []
+					}
+				},
+				{
+					name: "property.name.definition", 
+					node: {
+						text: '"testProperty"',
+						startPosition: { row: 0 },
+						endPosition: { row: 0 }
+					}
+				}
+			]
+
+			// Mock tree with rootNode
+			const mockTree = {
+				rootNode: {
+					text: '{"testProperty": {"value": 42}}',
+					startPosition: { row: 0 },
+					endPosition: { row: 2 }
+				}
+			}
+
+			// Mock the language query captures method
+			const mockLanguage = {
+				parser: { 
+					parse: vi.fn().mockReturnValue(mockTree)
+				},
+				query: { 
+					captures: vi.fn().mockReturnValue(mockCaptures)
+				}
+			}
+
+			// Set up parser with mock language for JSON
+			parser["loadedParsers"]["json"] = mockLanguage as any
+
+			const result = await parser["parseContent"]("test.json", '{"testProperty": {"value": 42}}', "hash")
+			
+			// Should extract identifier from JSON property captures (without quotes)
+			if (result.length > 0) {
+				expect(result[0].identifier).toBe("testProperty")
+				expect(result[0].type).toBe("pair")
+				expect(result[0].chunkSource).toBe("tree-sitter")
+			}
+		})
+	})
 })

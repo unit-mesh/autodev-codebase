@@ -138,8 +138,32 @@ export class CodeParser implements ICodeParser {
 
 		const results: CodeBlock[] = []
 
-		// Process captures if not empty
-		const queue: treeSitter.SyntaxNode[] = captures.map((capture: any) => capture.node)
+		// Process captures if not empty - build a map to track node identifiers
+		const nodeIdentifierMap = new Map<treeSitter.SyntaxNode, string>()
+		
+		// Extract identifiers from captures
+		for (const capture of captures) {
+			if (capture.name === 'name' || capture.name === 'property.name.definition') {
+				// Find the corresponding definition node for this name
+				const definitionCapture = captures.find(c => 
+					c.name.includes('definition') && 
+					c.node.startPosition.row <= capture.node.startPosition.row &&
+					c.node.endPosition.row >= capture.node.endPosition.row
+				)
+				if (definitionCapture) {
+					// For JSON properties, remove quotes from the identifier
+					let identifier = capture.node.text
+					if (capture.name === 'property.name.definition' && identifier.startsWith('"') && identifier.endsWith('"')) {
+						identifier = identifier.slice(1, -1)
+					}
+					nodeIdentifierMap.set(definitionCapture.node, identifier)
+				}
+			}
+		}
+
+		const queue: treeSitter.SyntaxNode[] = captures
+			.filter((capture: any) => capture.name.includes('definition'))
+			.map((capture: any) => capture.node)
 
 		while (queue.length > 0) {
 			const currentNode = queue.shift()!
@@ -165,7 +189,7 @@ export class CodeParser implements ICodeParser {
 					}
 				} else {
 					// Node meets min chars and is within max chars, create a block
-					const identifier =
+					const identifier = nodeIdentifierMap.get(currentNode) ||
 						currentNode.childForFieldName("name")?.text ||
 						currentNode.children?.find((c) => c.type === "identifier")?.text ||
 						null
@@ -188,6 +212,7 @@ export class CodeParser implements ICodeParser {
 							content,
 							segmentHash,
 							fileHash,
+							chunkSource: 'tree-sitter',
 						})
 					}
 				}
@@ -195,7 +220,7 @@ export class CodeParser implements ICodeParser {
 			// Nodes smaller than MIN_BLOCK_CHARS are ignored
 		}
 
-		return results
+		return this.deduplicateBlocks(results)
 	}
 
 	/**
@@ -236,6 +261,7 @@ export class CodeParser implements ICodeParser {
 						content: chunkContent,
 						segmentHash,
 						fileHash,
+						chunkSource: 'fallback',
 					})
 				}
 			}
@@ -260,6 +286,7 @@ export class CodeParser implements ICodeParser {
 					content: segment,
 					segmentHash,
 					fileHash,
+					chunkSource: 'line-segment',
 				})
 			}
 		}
@@ -371,6 +398,37 @@ export class CodeParser implements ICodeParser {
 			seenSegmentHashes,
 			baseStartLine,
 		)
+	}
+
+	/**
+	 * Removes blocks that are contained within other blocks to avoid duplication
+	 */
+	private deduplicateBlocks(blocks: CodeBlock[]): CodeBlock[] {
+		const sourceOrder = ['tree-sitter', 'fallback', 'line-segment']
+		blocks.sort((a, b) => 
+			sourceOrder.indexOf(a.chunkSource) - sourceOrder.indexOf(b.chunkSource)
+		)
+		
+		const result: CodeBlock[] = []
+		for (const block of blocks) {
+			const isDuplicate = result.some(existing => 
+				this.isBlockContained(block, existing)
+			)
+			if (!isDuplicate) {
+				result.push(block)
+			}
+		}
+		return result
+	}
+
+	/**
+	 * Checks if block1 is contained within block2
+	 */
+	private isBlockContained(block1: CodeBlock, block2: CodeBlock): boolean {
+		return block1.file_path === block2.file_path &&
+			block1.start_line >= block2.start_line && 
+			block1.end_line <= block2.end_line &&
+			block2.content.includes(block1.content)
 	}
 }
 

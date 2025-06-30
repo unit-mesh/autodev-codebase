@@ -125,4 +125,5 @@ export interface CodeBlock {
 	content: string
 	fileHash: string
 	segmentHash: string
+	chunkSource: 'tree-sitter' | 'fallback' | 'line-segment'
 }
