@@ -135,7 +135,7 @@ module.exports = [
       }),
       commonjs(),
       typescript({
-        tsconfig: './tsconfig.cli.json',
+        tsconfig: './tsconfig.json',
         rootDir: './src',
         noEmitOnError: false,
       }),
@@ -184,7 +184,7 @@ module.exports = [
       }),
       commonjs(),
       typescript({
-        tsconfig: './tsconfig.cli.json',
+        tsconfig: './tsconfig.json',
         rootDir: './src',
         noEmitOnError: false,
       }),

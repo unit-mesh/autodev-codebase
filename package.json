@@ -1,6 +1,6 @@
 {
   "name": "@autodev/codebase",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "type": "module",
   "bin": {
     "codebase": "./dist/cli.js"
@@ -11,7 +11,7 @@
   "scripts": {
     "dev": "rm -rf .autodev-cache/ && npx tsx src/index.ts --demo",
     "build": "rollup -c rollup.config.cjs && chmod +x dist/cli.js",
-    "type-check": "npx tsc -p tsconfig.cli.json --noEmit",
+    "type-check": "npx tsc -p tsconfig.json --noEmit",
     "demo-tui": "npx tsx src/examples/run-demo-tui.tsx",
     "mcp-server": "npx tsx src/index.ts mcp-server --demo --port=3002",
     "push": "npm publish --access public"
