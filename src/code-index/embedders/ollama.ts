@@ -1,5 +1,6 @@
 import { ApiHandlerOptions } from "../../shared/api"
 import { EmbedderInfo, EmbeddingResponse, IEmbedder } from "../interfaces"
+import { fetch, ProxyAgent } from "undici"
 
 /**
  * Implements the IEmbedder interface using a local Ollama instance.
@@ -22,21 +23,45 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 	 */
 	async createEmbeddings(texts: string[], model?: string): Promise<EmbeddingResponse> {
 		const modelToUse = model || this.defaultModelId
-		const url = `${this.baseUrl}/api/embed` // Endpoint as specified
+		const url = `${this.baseUrl}/api/embed`
+
+		// 检查环境变量中的代理设置
+		const httpsProxy = process.env['HTTPS_PROXY'] || process.env['https_proxy']
+		const httpProxy = process.env['HTTP_PROXY'] || process.env['http_proxy']
+
+		// 根据目标 URL 协议选择合适的代理
+		let dispatcher: any = undefined
+		const proxyUrl = url.startsWith('https:') ? httpsProxy : httpProxy
+
+		if (proxyUrl) {
+			try {
+				dispatcher = new ProxyAgent(proxyUrl)
+				console.log('✓ Using proxy:', proxyUrl)
+			} catch (error) {
+				console.error('✗ Failed to create proxy agent:', error)
+			}
+		} else {
+			console.log('ℹ No proxy configured')
+		}
+
+		const fetchOptions: any = {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				model: modelToUse,
+				input: texts,
+			}),
+		}
+
+		if (dispatcher) {
+			fetchOptions.dispatcher = dispatcher
+		}
+
 
 		try {
-			// Note: Standard Ollama API uses 'prompt' for single text, not 'input' for array.
-			// Implementing based on user's specific request structure.
-			const response = await fetch(url, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					model: modelToUse,
-					input: texts, // Using 'input' as requested
-				}),
-			})
+			const response = await fetch(url, fetchOptions)
 
 			if (!response.ok) {
 				let errorBody = "Could not read error body"
@@ -50,7 +75,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				)
 			}
 
-			const data = await response.json()
+			const data = await response.json() as any
 
 			// Extract embeddings using 'embeddings' key as requested
 			const embeddings = data.embeddings

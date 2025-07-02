@@ -7,6 +7,7 @@ import {
 	INITIAL_RETRY_DELAY_MS as INITIAL_DELAY_MS,
 } from "../constants"
 import { getDefaultModelId } from "../../shared/embeddingModels"
+import { fetch, ProxyAgent } from "undici"
 
 interface EmbeddingItem {
 	embedding: string | number[]
@@ -43,10 +44,45 @@ export class OpenAICompatibleEmbedder implements IEmbedder {
 			throw new Error("API key is required for OpenAI Compatible embedder")
 		}
 
-		this.embeddingsClient = new OpenAI({
+		// 检查环境变量中的代理设置
+		const httpsProxy = process.env['HTTPS_PROXY'] || process.env['https_proxy']
+		const httpProxy = process.env['HTTP_PROXY'] || process.env['http_proxy']
+		
+		// 根据目标 URL 协议选择合适的代理
+		const proxyUrl = baseUrl.startsWith('https:') ? httpsProxy : (httpProxy || httpsProxy)
+
+		let dispatcher: any = undefined
+		if (proxyUrl) {
+			try {
+				dispatcher = new ProxyAgent(proxyUrl)
+				console.log('✓ OpenAI Compatible using undici ProxyAgent:', proxyUrl)
+			} catch (error) {
+				console.error('✗ Failed to create undici ProxyAgent for OpenAI Compatible:', error)
+			}
+		} else {
+			console.log('ℹ No proxy configured for OpenAI Compatible')
+		}
+
+		// 调试OpenAI客户端配置
+		const clientConfig: any = {
 			baseURL: baseUrl,
 			apiKey: apiKey,
-		})
+		}
+		
+		if (dispatcher) {
+			clientConfig.fetch = (url: string, init?: any) => {
+				return fetch(url, {
+					...init,
+					dispatcher
+				})
+			}
+			console.log('📝 调试: OpenAI客户端将使用 undici ProxyAgent 代理')
+		} else {
+			clientConfig.fetch = fetch
+			console.log('📝 调试: OpenAI客户端不使用代理 (undici)')
+		}
+		
+		this.embeddingsClient = new OpenAI(clientConfig)
 		this.defaultModelId = modelId || getDefaultModelId("openai-compatible")
 	}
 

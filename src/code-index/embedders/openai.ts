@@ -1,5 +1,4 @@
 import { OpenAI } from "openai"
-// Remove unused import - OpenAiNativeHandler is not used in this file
 import { ApiHandlerOptions } from "../../shared/api"
 import { IEmbedder, EmbeddingResponse, EmbedderInfo } from "../interfaces/embedder"
 import {
@@ -8,6 +7,7 @@ import {
 	MAX_BATCH_RETRIES as MAX_RETRIES,
 	INITIAL_RETRY_DELAY_MS as INITIAL_DELAY_MS,
 } from "../constants"
+import { fetch, ProxyAgent } from "undici"
 
 /**
  * OpenAI implementation of the embedder interface with batching and rate limiting
@@ -21,8 +21,44 @@ export class OpenAiEmbedder implements IEmbedder {
 	 * @param options API handler options
 	 */
 	constructor(options: ApiHandlerOptions & { openAiEmbeddingModelId?: string }) {
-			const apiKey = options.openAiNativeApiKey ?? "not-provided"
-		this.embeddingsClient = new OpenAI({ apiKey })
+		const apiKey = options.openAiNativeApiKey ?? "not-provided"
+
+		// 检查环境变量中的代理设置
+		const httpsProxy = process.env['HTTPS_PROXY'] || process.env['https_proxy']
+		const httpProxy = process.env['HTTP_PROXY'] || process.env['http_proxy']
+
+		// OpenAI API 使用 HTTPS，所以优先使用 HTTPS 代理
+		const proxyUrl = httpsProxy || httpProxy
+
+		let dispatcher: any = undefined
+		if (proxyUrl) {
+			try {
+				dispatcher = new ProxyAgent(proxyUrl)
+				console.log('✓ OpenAI using undici ProxyAgent:', proxyUrl)
+			} catch (error) {
+				console.error('✗ Failed to create undici ProxyAgent for OpenAI:', error)
+			}
+		} else {
+			console.log('ℹ No proxy configured for OpenAI')
+		}
+
+		const clientConfig: any = {
+			apiKey,
+		}
+		if (dispatcher) {
+			clientConfig.fetch = (url: string, init?: any) => {
+				return fetch(url, {
+					...init,
+					dispatcher
+				})
+			}
+			console.log('📝 调试: OpenAI客户端将使用 undici ProxyAgent 代理')
+		} else {
+			clientConfig.fetch = fetch
+			console.log('📝 调试: OpenAI客户端不使用代理 (undici)')
+		}
+
+		this.embeddingsClient = new OpenAI(clientConfig)
 		this.defaultModelId = options.openAiEmbeddingModelId || "text-embedding-3-small"
 	}
 
