@@ -10,7 +10,6 @@ const VIEWS: AppState['currentView'][] = ['progress', 'search', 'config', 'logs'
 export interface AppState {
   currentView: 'config' | 'progress' | 'search' | 'logs';
   config: any;
-  progress: any;
   logs: string[];
   codeIndexManager: any;
   dependencies: any;
@@ -20,7 +19,6 @@ export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ 
   const [state, setState] = useState<AppState>({
     currentView: 'progress',
     config: null,
-    progress: { processedItems: 0, totalItems: 0, message: 'Initializing...' },
     logs: ['🚀 Starting Autodev Codebase TUI'],
     codeIndexManager,
     dependencies
@@ -64,9 +62,6 @@ export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ 
     }));
   };
 
-  const updateProgress = (progress: any) => {
-    setState(prev => ({ ...prev, progress }));
-  };
 
   const updateConfig = (config: any) => {
     setState(prev => ({ ...prev, config }));
@@ -107,7 +102,6 @@ export const App: React.FC<{ codeIndexManager?: any; dependencies?: any }> = ({ 
           )}
           {state.currentView === 'progress' && (
             <ProgressMonitor
-              progress={state.progress}
               codeIndexManager={state.codeIndexManager}
               onLog={addLog}
             />

@@ -58,18 +58,17 @@ export class CodeIndexOrchestrator {
 
 			this._fileWatcherSubscriptions = [
 				this.fileWatcher.onDidStartBatchProcessing((filePaths: string[]) => {}),
-				this.fileWatcher.onBatchProgressUpdate(({ processedInBatch, totalInBatch, currentFile }) => {
-					if (totalInBatch > 0 && this.stateManager.state !== "Indexing") {
+				this.fileWatcher.onBatchProgressBlocksUpdate(({ processedBlocks, totalBlocks }) => {
+					if (totalBlocks > 0 && this.stateManager.state !== "Indexing") {
 						this.stateManager.setSystemState("Indexing", "Processing file changes...")
 					}
-					this.stateManager.reportFileQueueProgress(
-						processedInBatch,
-						totalInBatch,
-						currentFile ? path.basename(currentFile) : undefined,
+					this.stateManager.reportBlockIndexingProgress(
+						processedBlocks,
+						totalBlocks,
 					)
-					if (processedInBatch === totalInBatch) {
+					if (processedBlocks === totalBlocks) {
 						// Covers (N/N) and (0/0)
-						if (totalInBatch > 0) {
+						if (totalBlocks > 0) {
 							// Batch with items completed
 							this.stateManager.setSystemState("Indexed", "File changes processed. Index up-to-date.")
 						} else {

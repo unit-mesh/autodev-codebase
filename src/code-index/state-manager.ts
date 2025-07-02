@@ -28,6 +28,9 @@ export class CodeIndexStateManager {
 			systemStatus: this._systemStatus,
 			fileStatuses: {}, // TODO: Implement file-level status tracking
 			message: this._statusMessage,
+			processedItems: this._processedItems,
+			totalItems: this._totalItems,
+			currentItemUnit: this._currentItemUnit,
 		}
 	}
 

@@ -69,12 +69,20 @@ export interface ICodeFileWatcher {
 	readonly onDidStartBatchProcessing: (handler: (data: string[]) => void) => () => void
 
 	/**
-	 * Event emitted to report progress during batch processing.
+	 * Event emitted to report progress during batch processing (file-level).
 	 */
 	readonly onBatchProgressUpdate: (handler: (data: {
 		processedInBatch: number
 		totalInBatch: number
 		currentFile?: string
+	}) => void) => () => void
+
+	/**
+	 * Event emitted to report progress during batch processing (block-level).
+	 */
+	readonly onBatchProgressBlocksUpdate: (handler: (data: {
+		processedBlocks: number
+		totalBlocks: number
 	}) => void) => () => void
 
 	/**

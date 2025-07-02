@@ -4,12 +4,6 @@ import type { CodeIndexManager } from '../../code-index/manager';
 import type { IndexingState } from '../../code-index/interfaces/manager';
 
 interface ProgressMonitorProps {
-  progress: {
-    processedItems: number;
-    totalItems: number;
-    currentItemUnit?: string;
-    message: string;
-  };
   codeIndexManager: CodeIndexManager;
   onLog: (message: string) => void;
 }
@@ -18,12 +12,13 @@ interface SystemStatus {
   systemStatus: IndexingState;
   fileStatuses: Record<string, unknown>;
   message: string;
-  totalItems?: number;
+  processedItems: number;
+  totalItems: number;
+  currentItemUnit: string;
   lastUpdate?: Date;
 }
 
 export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
-  progress,
   codeIndexManager,
   onLog
 }) => {
@@ -36,16 +31,19 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
 
     const updateStatus = () => {
       const currentStatus = codeIndexManager.getCurrentStatus();
-      setStatus(currentStatus);
+      setStatus({
+        ...currentStatus,
+        lastUpdate: new Date()
+      });
     };
 
     updateStatus();
-    const interval = setInterval(updateStatus, 1000);
+    const interval = setInterval(updateStatus, 500);
     return () => clearInterval(interval);
   }, [codeIndexManager]);
 
   const getProgressBar = (processed: number, total: number) => {
-    if (total === 0) return '▓▓▓▓▓▓▓▓▓▓';
+    if (total === 0) return '▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓';
 
     const percentage = Math.min(processed / total, 1);
     const filled = Math.round(percentage * 20);
@@ -79,29 +77,20 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
         {status && (
           <>
             <Box >
-              {status.totalItems !== undefined && (
-                <Text>
-                  <Text color="gray">Total Items: </Text>
-                  <Text color="white">{status.totalItems}</Text>
-                </Text>
-              )}
-            </Box>
-
-            <Box >
               <Text>
                 <Text color="gray">Progress: </Text>
                 <Text color="white">
-                  {progress.processedItems}/{progress.totalItems} {progress.currentItemUnit || 'items'}
+                  {status.processedItems}/{status.totalItems} {status.currentItemUnit || 'items'}
                 </Text>
-                {progress.totalItems === 0 && status?.systemStatus === 'Indexed' && (
+                {status.totalItems === 0 && status.systemStatus === 'Indexed' && (
                   <Text color="yellow"> (All files cached)</Text>
                 )}
               </Text>
             </Box>
 
             <Box >
-              <Text>{getProgressBar(progress.processedItems, progress.totalItems)}</Text>
-              <Text color="gray"> {progress.totalItems > 0 ? Math.round((progress.processedItems / progress.totalItems) * 100) : 0}%</Text>
+              <Text>{getProgressBar(status.processedItems, status.totalItems)}</Text>
+              <Text color="gray"> {status.totalItems > 0 ? Math.round((status.processedItems / status.totalItems) * 100) : 100}%</Text>
             </Box>
           </>
         )}
@@ -109,7 +98,7 @@ export const ProgressMonitor: React.FC<ProgressMonitorProps> = ({
         <Box >
           <Text>
             <Text color="gray">Message: </Text>
-            <Text color="cyan">{status?.message || progress.message}</Text>
+            <Text color="cyan">{status?.message || 'Initializing...'}</Text>
           </Text>
         </Box>
 
