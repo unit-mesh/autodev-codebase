@@ -1,5 +1,40 @@
-import { ApiHandlerOptions } from "../../shared/api"
 import { EmbedderProvider } from "./manager"
+
+/**
+ * Ollama embedder configuration
+ */
+export interface OllamaEmbedderConfig {
+	provider: "ollama"
+	baseUrl: string
+	model: string
+	dimension: number
+}
+
+/**
+ * OpenAI embedder configuration
+ */
+export interface OpenAIEmbedderConfig {
+	provider: "openai"
+	apiKey: string
+	model: string
+	dimension: number
+}
+
+/**
+ * OpenAI Compatible embedder configuration
+ */
+export interface OpenAICompatibleEmbedderConfig {
+	provider: "openai-compatible"
+	baseUrl: string
+	apiKey: string
+	model: string
+	dimension: number
+}
+
+/**
+ * Union type for all embedder configurations
+ */
+export type EmbedderConfig = OllamaEmbedderConfig | OpenAIEmbedderConfig | OpenAICompatibleEmbedderConfig
 
 /**
  * Configuration state for the code indexing feature
@@ -7,11 +42,7 @@ import { EmbedderProvider } from "./manager"
 export interface CodeIndexConfig {
 	isEnabled: boolean
 	isConfigured: boolean
-	embedderProvider: EmbedderProvider
-	modelId?: string
-	openAiOptions?: ApiHandlerOptions
-	ollamaOptions?: ApiHandlerOptions
-	openAiCompatibleOptions?: { baseUrl: string; apiKey: string; modelDimension?: number }
+	embedder: EmbedderConfig
 	qdrantUrl?: string
 	qdrantApiKey?: string
 	searchMinScore?: number
@@ -24,12 +55,7 @@ export type PreviousConfigSnapshot = {
 	enabled: boolean
 	configured: boolean
 	embedderProvider: EmbedderProvider
-	modelId?: string
-	openAiKey?: string
-	ollamaBaseUrl?: string
-	openAiCompatibleBaseUrl?: string
-	openAiCompatibleApiKey?: string
-	openAiCompatibleModelDimension?: number
+	embedderConfig: string // JSON string of embedder config for comparison
 	qdrantUrl?: string
 	qdrantApiKey?: string
 }

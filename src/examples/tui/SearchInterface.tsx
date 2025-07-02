@@ -106,7 +106,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
         // Re-apply filters to existing results if we have any
         if (results.length > 0 && query.trim()) {
           await performSearch();
-       } 
+       }
         return;
       }
 
@@ -589,7 +589,7 @@ export const SearchInterface: React.FC<SearchInterfaceProps> = ({
                             dimColor
                             key={`preview-${globalIndex}-${forceRefresh}`}
                           >
-                            {truncateToSingleLine(result.payload?.codeChunk || '', 60)}
+                            {truncateToSingleLine(result.payload?.codeChunk || '', 100)}
                           </Text>
                         </Box>
                       </Box>

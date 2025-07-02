@@ -18,7 +18,7 @@ export function createTUIApp(options: CliOptions) {
     const [codeIndexManager, setCodeIndexManager] = React.useState<any>(null);
     const [dependencies, setDependencies] = React.useState<any>(null);
     const [error, setError] = React.useState<string | null>(null);
-    
+
     React.useEffect(() => {
       async function initialize() {
         // Ensure options.path is absolute; if not, prepend process.cwd()
@@ -31,6 +31,10 @@ export function createTUIApp(options: CliOptions) {
         const workspacePath = options.demo
           ? path.join(resolvedPath, 'demo')
           : resolvedPath;
+
+        // Use config file from workspace directory
+        const configPath = options.config || path.join(workspacePath, 'autodev-config.json');
+
         // console.log('[tui-runner]📂 Workspace path:', workspacePath);
         const deps = createNodeDependencies({
           workspacePath,
@@ -45,15 +49,15 @@ export function createTUIApp(options: CliOptions) {
             colors: true
           },
           configOptions: {
-            configPath: options.config || path.join(process.cwd(), '.autodev-config.json'),
+            configPath,
             defaultConfig: {
               isEnabled: true,
               isConfigured: true,
-              embedderProvider: "ollama",
-              modelId: options.model,
-              ollamaOptions: {
-                ollamaBaseUrl: options.ollamaUrl,
-                apiKey: '',
+              embedder: {
+                provider: "ollama" as const,
+                baseUrl: options.ollamaUrl,
+                model: options.model || "dengcao/Qwen3-Embedding-0.6B:f16",
+                dimension: 1024
               },
               qdrantUrl: options.qdrantUrl
             }
@@ -63,7 +67,7 @@ export function createTUIApp(options: CliOptions) {
         try {
           // Log workspace path after deps are created so we can use the logger
           deps.logger?.info('[tui-runner]📂 Workspace path:', workspacePath);
-          
+
           // Create demo files if requested
           if (options.demo) {
             const workspaceExists = await deps.fileSystem.exists(workspacePath);
@@ -126,7 +130,7 @@ export function createTUIApp(options: CliOptions) {
           // Start indexing in background
           deps.logger?.info('[tui-runner]🚀 Preparing to start indexing...');
           manager.onProgressUpdate((progressInfo) => {
-            deps.logger?.info('[tui-runner]📊 Indexing progress:', progressInfo);
+            deps.logger?.info('[tui-runner]📊 Indexing progress:', JSON.stringify(progressInfo));
           });
 
           setTimeout(() => {
@@ -193,7 +197,7 @@ async function createHTTPMCPServer(manager: CodeIndexManager, options?: { port?:
     port: options?.port,
     host: options?.host
   });
-  
+
   await server.start();
   return server;
 }
@@ -202,9 +206,9 @@ export async function startStdioAdapterMode(options: CliOptions): Promise<void> 
   // console.log('🔌 Starting Stdio Adapter Mode');
   // console.log(`🌐 Connecting to server: ${options.stdioServerUrl || 'http://localhost:3001'}`);
   // console.log(`⏱️ Request timeout: ${options.stdioTimeout || 30000}ms`);
-  
+
   const { StdioToSSEAdapter } = await import('../mcp/stdio-adapter');
-  
+
   const adapter = new StdioToSSEAdapter({
     serverUrl: options.stdioServerUrl || 'http://localhost:3001/sse',
     timeout: options.stdioTimeout || 30000
@@ -212,7 +216,7 @@ export async function startStdioAdapterMode(options: CliOptions): Promise<void> 
 
   try {
     await adapter.start();
-    
+
     // Handle graceful shutdown
     const handleShutdown = () => {
       console.error('🔄 Shutting down stdio adapter...');
@@ -222,7 +226,7 @@ export async function startStdioAdapterMode(options: CliOptions): Promise<void> 
 
     process.on('SIGINT', handleShutdown);
     process.on('SIGTERM', handleShutdown);
-    
+
     // Keep the process alive to handle stdio communication
     return new Promise(() => {}); // Never resolves
   } catch (error) {
@@ -242,10 +246,14 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
   const workspacePath = options.demo
     ? path.join(resolvedPath, 'demo')
     : resolvedPath;
-  
+
+  // Use config file from workspace directory
+  const configPath = options.config || path.join(workspacePath, 'autodev-config.json');
+
   console.log('🚀 Starting MCP Server Mode');
   console.log(`📂 Workspace: ${workspacePath}`);
-  
+  console.log(`⚙️ Config: ${configPath}`);
+
   const deps = createNodeDependencies({
     workspacePath,
     storageOptions: {
@@ -259,15 +267,15 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
       colors: false // Disable colors for MCP server mode
     },
     configOptions: {
-      configPath: options.config || path.join(process.cwd(), '.autodev-config.json'),
+      configPath,
       defaultConfig: {
         isEnabled: true,
         isConfigured: true,
-        embedderProvider: "ollama",
-        modelId: options.model,
-        ollamaOptions: {
-          ollamaBaseUrl: options.ollamaUrl,
-          apiKey: '',
+        embedder: {
+          provider: "ollama" as const,
+          baseUrl: options.ollamaUrl,
+          model: options.model || "dengcao/Qwen3-Embedding-0.6B:f16",
+          dimension: 1024
         },
         qdrantUrl: options.qdrantUrl
       }
@@ -287,10 +295,10 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
 
     console.log('⚙️ Loading configuration...');
     const config = await deps.configProvider.loadConfig();
-    
+
     console.log('✅ Validating configuration...');
     const validation = await deps.configProvider.validateConfig();
-    
+
     if (!validation.isValid) {
       console.warn('⚠️ Configuration validation warnings:', validation.errors);
       console.log('⚠️ Continuing initialization (debug mode)');
@@ -300,7 +308,7 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
 
     console.log('🔧 Creating CodeIndexManager...');
     const manager = CodeIndexManager.getInstance(deps);
-    
+
     if (!manager) {
       throw new Error('Failed to create CodeIndexManager - workspace root path may be invalid');
     }
@@ -316,7 +324,7 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
       host: options.mcpHost
     });
     console.log('✅ MCP Server started successfully');
-    
+
     // Display configuration instructions
     console.log('\n🔗 MCP Server is now running!');
     console.log('To connect your IDE to the HTTP SSE MCP server, use the following configuration:');
@@ -368,7 +376,7 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
     process.on('SIGTERM', handleShutdown);
 
     console.log('📡 MCP Server is ready for connections. Press Ctrl+C to stop.');
-    
+
     // Keep the process alive
     return new Promise(() => {}); // This never resolves, keeping the server running
 

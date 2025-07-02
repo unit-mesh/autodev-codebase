@@ -1,5 +1,11 @@
 {
   "isEnabled": true,
-  "isConfigured": false,
-  "embedderProvider": "ollama"
+  "isConfigured": true,
+  "embedder": {
+    "provider": "ollama",
+    "baseUrl": "http://localhost:11434",
+    "model": "dengcao/Qwen3-Embedding-0.6B:f16",
+    "dimension": 1024
+  },
+  "qdrantUrl": "http://localhost:6333"
 }

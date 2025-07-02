@@ -33,7 +33,7 @@ export class CodeIndexSearchService {
 			// Allow search during Indexing too
 			throw new Error(`Code index is not ready for search. Current state: ${currentState}`)
 		}
-		query = "search_codebase: " + query // Prefix query for better context
+		query = "search_code: " + query // Prefix query for better context
 		try {
 			// Generate embedding for query
 			const embeddingResponse = await this.embedder.createEmbeddings([query])

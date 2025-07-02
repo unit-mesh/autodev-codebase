@@ -36,7 +36,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 		if (proxyUrl) {
 			try {
 				dispatcher = new ProxyAgent(proxyUrl)
-				console.log('✓ Using proxy:', proxyUrl)
+				// console.log('✓ Using proxy:', proxyUrl)
 			} catch (error) {
 				console.error('✗ Failed to create proxy agent:', error)
 			}

@@ -1,3 +1,12 @@
+// Import the new configuration interfaces
+import { 
+  CodeIndexConfig,
+  EmbedderConfig as NewEmbedderConfig,
+  OllamaEmbedderConfig,
+  OpenAIEmbedderConfig,
+  OpenAICompatibleEmbedderConfig
+} from '../code-index/interfaces/config'
+
 // Temporary placeholder for ApiHandlerOptions - will be properly defined later
 export interface ApiHandlerOptions {
   apiKey?: string
@@ -76,28 +85,18 @@ export interface SearchConfig {
   maxResults?: number
 }
 
-/**
- * Complete code index configuration
- */
-export interface CodeIndexConfig {
-  isEnabled: boolean
-  isConfigured: boolean
-  embedderProvider: EmbedderProvider
-  modelId?: string
-  openAiOptions?: ApiHandlerOptions
-  ollamaOptions?: ApiHandlerOptions
-  openAiCompatibleOptions?: {
-    baseUrl: string
-    apiKey: string
-    modelDimension?: number
-  }
-  qdrantUrl?: string
-  qdrantApiKey?: string
-  searchMinScore?: number
+// Re-export the new configuration interfaces for external use
+export type { 
+  CodeIndexConfig,
+  NewEmbedderConfig,
+  OllamaEmbedderConfig,
+  OpenAIEmbedderConfig,
+  OpenAICompatibleEmbedderConfig
 }
 
 /**
  * Configuration snapshot for restart detection
+ * Using legacy format for backwards compatibility during transition
  */
 export interface ConfigSnapshot {
   enabled: boolean

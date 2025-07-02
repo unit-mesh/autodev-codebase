@@ -44,78 +44,54 @@ export class CodeIndexServiceFactory {
 	/**
 	 * Creates an embedder instance based on the current configuration.
 	 */
-	public createEmbedder(): IEmbedder {
-		const config = this.configManager.getConfig()
+	public async createEmbedder(): Promise<IEmbedder> {
+		const config = await this.configManager.getConfig()
+		const embedderConfig = config.embedder
 
-		const provider = config.embedderProvider as EmbedderProvider
-
-		if (provider === "openai") {
-			if (!config.openAiOptions?.openAiNativeApiKey) {
-				throw new Error("OpenAI configuration missing for embedder creation")
+		if (embedderConfig.provider === "openai") {
+			if (!embedderConfig.apiKey) {
+				throw new Error("OpenAI API key missing for embedder creation")
 			}
 			return new OpenAiEmbedder({
-				...config.openAiOptions,
-				openAiEmbeddingModelId: config.modelId,
+				openAiNativeApiKey: embedderConfig.apiKey,
+				openAiEmbeddingModelId: embedderConfig.model,
 			})
-		} else if (provider === "ollama") {
-			if (!config.ollamaOptions?.ollamaBaseUrl) {
-				throw new Error("Ollama configuration missing for embedder creation")
+		} else if (embedderConfig.provider === "ollama") {
+			if (!embedderConfig.baseUrl) {
+				throw new Error("Ollama base URL missing for embedder creation")
 			}
 			return new CodeIndexOllamaEmbedder({
-				...config.ollamaOptions,
-				ollamaModelId: config.modelId,
+				ollamaBaseUrl: embedderConfig.baseUrl,
+				ollamaModelId: embedderConfig.model,
 			})
-		} else if (provider === "openai-compatible") {
-			if (!config.openAiCompatibleOptions?.baseUrl || !config.openAiCompatibleOptions?.apiKey) {
-				throw new Error("OpenAI Compatible configuration missing for embedder creation")
+		} else if (embedderConfig.provider === "openai-compatible") {
+			if (!embedderConfig.baseUrl || !embedderConfig.apiKey) {
+				throw new Error("OpenAI Compatible base URL and API key missing for embedder creation")
 			}
 			return new OpenAICompatibleEmbedder(
-				config.openAiCompatibleOptions.baseUrl,
-				config.openAiCompatibleOptions.apiKey,
-				config.modelId,
+				embedderConfig.baseUrl,
+				embedderConfig.apiKey,
+				embedderConfig.model,
 			)
 		}
 
-		throw new Error(`Invalid embedder type configured: ${config.embedderProvider}`)
+		throw new Error(`Invalid embedder provider configured: ${embedderConfig.provider}`)
 	}
 
 	/**
 	 * Creates a vector store instance using the current configuration.
 	 */
-	public createVectorStore(): IVectorStore {
-		const config = this.configManager.getConfig()
+	public async createVectorStore(): Promise<IVectorStore> {
+		const config = await this.configManager.getConfig()
 		this.debug(`Debug createVectorStore config:`, JSON.stringify(config, null, 2))
 
-		const provider = config.embedderProvider as EmbedderProvider
-		const defaultModel = getDefaultModelId(provider)
-		// Use the embedding model ID from config, not the chat model IDs
-		const modelId = config.modelId ?? defaultModel
-		this.debug(`Debug: provider=${provider}, defaultModel=${defaultModel}, modelId=${modelId}`)
+		const embedderConfig = config.embedder
+		const vectorSize = embedderConfig.dimension
 
-		let vectorSize: number | undefined
+		this.debug(`Debug: provider=${embedderConfig.provider}, model=${embedderConfig.model}, dimension=${vectorSize}`)
 
-		if (provider === "openai-compatible") {
-			if (config.openAiCompatibleOptions?.modelDimension && config.openAiCompatibleOptions.modelDimension > 0) {
-				vectorSize = config.openAiCompatibleOptions.modelDimension
-			} else {
-				// Fallback if not provided or invalid in openAiCompatibleOptions
-				vectorSize = getModelDimension(provider, modelId)
-			}
-		} else {
-			this.debug(`About to call getModelDimension with provider=${provider}, modelId=${modelId}`)
-			vectorSize = getModelDimension(provider, modelId)
-			this.debug(`After getModelDimension call: vectorSize=${vectorSize}`)
-			this.debug(`Debug: provider=${provider}, modelId=${modelId}, vectorSize=${vectorSize}`)
-		}
-
-		if (vectorSize === undefined) {
-			let errorMessage = `Could not determine vector dimension for model '${modelId}' with provider '${provider}'. `
-			if (provider === "openai-compatible") {
-				errorMessage += `Please ensure the 'Embedding Dimension' is correctly set in the OpenAI-Compatible provider settings.`
-			} else {
-				errorMessage += `Check model profiles or configuration.`
-			}
-			throw new Error(errorMessage)
+		if (!vectorSize || vectorSize <= 0) {
+			throw new Error(`Invalid vector dimension '${vectorSize}' for model '${embedderConfig.model}' with provider '${embedderConfig.provider}'. Please specify a valid dimension in the configuration.`)
 		}
 
 		if (!config.qdrantUrl) {
@@ -172,26 +148,26 @@ export class CodeIndexServiceFactory {
 	 * Creates all required service dependencies if the service is properly configured.
 	 * @throws Error if the service is not properly configured
 	 */
-	public createServices(
+	public async createServices(
 		fileSystem: IFileSystem,
 		eventBus: IEventBus,
 		cacheManager: CacheManager,
 		ignoreInstance: Ignore,
 		workspace: IWorkspace,
 		pathUtils: IPathUtils
-	): {
+	): Promise<{
 		embedder: IEmbedder
 		vectorStore: IVectorStore
 		parser: ICodeParser
 		scanner: DirectoryScanner
 		fileWatcher: ICodeFileWatcher
-	} {
+	}> {
 		if (!this.configManager.isFeatureConfigured) {
 			throw new Error("Cannot create services: Code indexing is not properly configured")
 		}
 
-		const embedder = this.createEmbedder()
-		const vectorStore = this.createVectorStore()
+		const embedder = await this.createEmbedder()
+		const vectorStore = await this.createVectorStore()
 		const parser = codeParser
 		const scanner = this.createDirectoryScanner(embedder, vectorStore, parser, ignoreInstance, fileSystem, workspace, pathUtils)
 		const fileWatcher = this.createFileWatcher(fileSystem, eventBus, workspace, pathUtils, embedder, vectorStore, cacheManager, ignoreInstance)

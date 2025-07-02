@@ -1,5 +1,5 @@
 import { EmbedderProvider } from "./interfaces/manager"
-import { CodeIndexConfig } from "./interfaces/config"
+import { CodeIndexConfig, EmbedderConfig as NewEmbedderConfig } from "./interfaces/config"
 import { SEARCH_MIN_SCORE } from "./constants"
 import { getDefaultModelId, getModelDimension } from "../shared/embeddingModels"
 import {
@@ -40,30 +40,51 @@ export class CodeIndexConfigManager {
 
 	/**
 	 * Private method that handles loading configuration from storage and updating instance variables.
-	 * This eliminates code duplication between initializeWithCurrentConfig() and loadConfiguration().
+	 * Now uses the new unified configuration structure.
 	 */
 	private async _loadAndSetConfiguration(): Promise<void> {
-		// Load configuration using the abstract config provider
-		const [embedderConfig, vectorStoreConfig, searchConfig] = await Promise.all([
-			this.configProvider.getEmbedderConfig(),
-			this.configProvider.getVectorStoreConfig(),
-			this.configProvider.getSearchConfig()
-		])
+		// Load configuration using the new unified config structure
+		const config = await this.configProvider.getConfig()
 
 		// Update instance variables with configuration
-		this.isEnabled = this.configProvider.isCodeIndexEnabled()
-		this.embedderProvider = embedderConfig.provider
-		this.modelId = embedderConfig.modelId
-		this.openAiOptions = embedderConfig.openAiOptions
-		this.ollamaOptions = embedderConfig.ollamaOptions
-		this.openAiCompatibleOptions = embedderConfig.openAiCompatibleOptions
+		this.isEnabled = config.isEnabled
+		
+		// Convert new embedder config to legacy internal state for compatibility
+		if (config.embedder.provider === "openai") {
+			this.embedderProvider = "openai"
+			this.modelId = config.embedder.model
+			this.openAiOptions = {
+				apiKey: config.embedder.apiKey,
+				openAiNativeApiKey: config.embedder.apiKey
+			}
+			this.ollamaOptions = undefined
+			this.openAiCompatibleOptions = undefined
+		} else if (config.embedder.provider === "ollama") {
+			this.embedderProvider = "ollama"
+			this.modelId = config.embedder.model
+			this.ollamaOptions = {
+				ollamaBaseUrl: config.embedder.baseUrl
+			}
+			this.openAiOptions = undefined
+			this.openAiCompatibleOptions = undefined
+		} else if (config.embedder.provider === "openai-compatible") {
+			this.embedderProvider = "openai-compatible"
+			this.modelId = config.embedder.model
+			this.openAiCompatibleOptions = {
+				baseUrl: config.embedder.baseUrl,
+				apiKey: config.embedder.apiKey,
+				modelDimension: config.embedder.dimension
+			}
+			this.openAiOptions = undefined
+			this.ollamaOptions = undefined
+		}
 
 		// Vector store configuration
-		this.qdrantUrl = vectorStoreConfig.qdrantUrl ?? "http://localhost:6333"
-		this.qdrantApiKey = vectorStoreConfig.qdrantApiKey ?? ""
+		this.qdrantUrl = config.qdrantUrl ?? "http://localhost:6333"
+		this.qdrantApiKey = config.qdrantApiKey ?? ""
 
 		// Search configuration
-		this.searchMinScore = searchConfig.minScore ?? SEARCH_MIN_SCORE
+		this.searchMinScore = config.searchMinScore ?? SEARCH_MIN_SCORE
 	}
 
 	/**
@@ -101,7 +122,7 @@ export class CodeIndexConfigManager {
 		}
 
 		// Load new configuration from storage and update instance variables
-		this._loadAndSetConfiguration()
+		await this._loadAndSetConfiguration()
 
 		const requiresRestart = this.doesConfigChangeRequireRestart(previousConfigSnapshot)
 
@@ -201,7 +222,7 @@ export class CodeIndexConfigManager {
 			}
 
 			if (this.embedderProvider === "ollama") {
-				const currentOllamaBaseUrl = this.ollamaOptions?.baseUrl ?? ""
+				const currentOllamaBaseUrl = this.ollamaOptions?.ollamaBaseUrl ?? ""
 				if (prevOllamaBaseUrl !== currentOllamaBaseUrl) {
 					return true
 				}
@@ -261,19 +282,10 @@ export class CodeIndexConfigManager {
 	/**
 	 * Gets the current configuration state.
 	 */
-	public getConfig(): CodeIndexConfig {
-		return {
-			isEnabled: this.isEnabled,
-			isConfigured: this.isConfigured(),
-			embedderProvider: this.embedderProvider,
-			modelId: this.modelId,
-			openAiOptions: this.openAiOptions,
-			ollamaOptions: this.ollamaOptions,
-			openAiCompatibleOptions: this.openAiCompatibleOptions,
-			qdrantUrl: this.qdrantUrl,
-			qdrantApiKey: this.qdrantApiKey,
-			searchMinScore: this.searchMinScore,
-		}
+	public async getConfig(): Promise<CodeIndexConfig> {
+		// Load the latest configuration from the provider to get accurate dimension values
+		const config = await this.configProvider.getConfig()
+		return config
 	}
 
 	/**

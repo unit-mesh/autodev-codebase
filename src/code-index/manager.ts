@@ -158,7 +158,7 @@ export class CodeIndexManager implements ICodeIndexManager {
 			ignoreInstance.add(ignoreRules)
 
 			// (Re)Create shared service instances  
-			const { embedder, vectorStore, scanner, fileWatcher } = this._serviceFactory.createServices(
+			const { embedder, vectorStore, scanner, fileWatcher } = await this._serviceFactory.createServices(
 				this.dependencies.fileSystem,
 				this.dependencies.eventBus,
 				this._cacheManager,
