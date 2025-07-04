@@ -105,7 +105,6 @@ interface CodeIndexConfig extends BaseConfig {
 
 文件: `src/adapters/nodejs/config.ts`
 
-- 添加了配置迁移逻辑 `migrateLegacyConfig()`
 - 更新了 `isConfigured()` 验证方法
 - 提供向后兼容的 `getEmbedderConfig()` 方法
 

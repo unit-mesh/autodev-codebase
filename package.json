@@ -49,7 +49,7 @@
     "tree-sitter": "^0.21.1",
     "tree-sitter-wasms": "^0.1.12",
     "tslib": "^2.7.0",
-    "undici": "^7.11.0",
+    "undici": "^6.19.8",
     "undici-types": "^7.10.0",
     "uuid": "^10.0.0",
     "vitest": "^3.2.4",

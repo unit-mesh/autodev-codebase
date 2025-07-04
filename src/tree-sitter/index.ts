@@ -35,6 +35,7 @@ export function setMinComponentLines(value: number): void {
 const extensions = [
 	"tla",
 	"js",
+	"mjs",
 	"jsx",
 	"ts",
 	"vue",

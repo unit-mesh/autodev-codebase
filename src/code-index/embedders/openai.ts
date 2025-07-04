@@ -39,11 +39,12 @@ export class OpenAiEmbedder implements IEmbedder {
 				console.error('✗ Failed to create undici ProxyAgent for OpenAI:', error)
 			}
 		} else {
-			console.log('ℹ No proxy configured for OpenAI')
+			// console.log('ℹ No proxy configured for OpenAI')
 		}
 
 		const clientConfig: any = {
 			apiKey,
+			dangerouslyAllowBrowser: true,
 		}
 		if (dispatcher) {
 			clientConfig.fetch = (url: string, init?: any) => {
@@ -55,7 +56,7 @@ export class OpenAiEmbedder implements IEmbedder {
 			console.log('📝 调试: OpenAI客户端将使用 undici ProxyAgent 代理')
 		} else {
 			clientConfig.fetch = fetch
-			console.log('📝 调试: OpenAI客户端不使用代理 (undici)')
+			// console.log('📝 调试: OpenAI客户端不使用代理 (undici)')
 		}
 
 		this.embeddingsClient = new OpenAI(clientConfig)

@@ -15,7 +15,7 @@ describe("OpenAICompatibleEmbedder", () => {
 	let mockEmbeddingsCreate: MockedFunction<any>
 
 	const testBaseUrl = "https://api.siliconflow.cn/v1"
-	const testApiKey = "sk-ughiikqkayqxxwxfflddywnssdesczoggpdqjngfuojrcabd"
+	const testApiKey = "sk-xxxxx"
 	const testModelId = "Qwen/Qwen3-Embedding-4B"
 
 	beforeEach(() => {

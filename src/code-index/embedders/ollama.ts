@@ -41,7 +41,7 @@ export class CodeIndexOllamaEmbedder implements IEmbedder {
 				console.error('✗ Failed to create proxy agent:', error)
 			}
 		} else {
-			console.log('ℹ No proxy configured')
+			// console.log('ℹ No proxy configured')
 		}
 
 		const fetchOptions: any = {

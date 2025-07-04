@@ -68,7 +68,7 @@ const testQueries = [
 async function runEmbeddingTest() {
   console.log('🚀 开始embedding测试...\n')
 
-  const ollamaConfig = {
+  const ollamaModelList = {
     // ollamaBaseUrl: 'http://192.168.31.10:11434',
     // ollamaModelId: 'nomic-embed-text', // dimension 768
     // ollamaModelId: 'bge-m3:latest', // dimension 1024
@@ -84,27 +84,28 @@ async function runEmbeddingTest() {
     // ollamaModelId: 'unclemusclez/jina-embeddings-v2-base-code:latest', // dimension 768
     // ollamaModelId: 'hf.co/nomic-ai/nomic-embed-text-v2-moe-GGUF:f16', // dimension 768
     // ollamaModelId: 'hf.co/nomic-ai/nomic-embed-code-GGUF:Q4_K_M', // dimension 3584
-    ollamaModelId: 'dengcao/bge-reranker-v2-m3', // dimension 1024
+    // ollamaModelId: 'hf.co/taylor-jones/bge-code-v1-Q8_0-GGUF', // lmstudio dimension 1536,
+    // ollamaModelId: 'dengcao/bge-reranker-v2-m3', // dimension 1024
     type: 'ollama'
   }
-  const openaiConfig = {
+  const openaiModelList = {
     // openaiBaseUrl: 'http://one-api-proxy.orb.local/v1', // oneapi
     openaiBaseUrl: 'http://192.168.31.10:5000/v1', // lmstudio
     openaiApiKey: 'sk-USqYzFUmccukXK0jC392D995Aa4b4a2d9c49892c37E323B7',
-    // openaiModel: 'Qwen/Qwen3-Embedding-8B',
-    // openaiModel: 'Qwen/Qwen3-Embedding-4B',
-    // openaiModel: 'Qwen/Qwen3-Embedding-0.6B',
-    // openaiModel: 'Pro/BAAI/bge-m3',
-    // openaiModel: 'BAAI/bge-large-en-v1.5',
-    // openaiModel: 'netease-youdao/bce-embedding-base_v1',
-    // openaiModel: 'morph-embedding-v2',
-    // openaiModel: 'text-embedding-ada-002',
-    // openaiModel: 'text-embedding-3-small',
-    // openaiModel: 'text-embedding-3-large',
-    // openaiModel: 'voyage-3-large',
-    // openaiModel: 'voyage-3.5',
-    // openaiModel: 'voyage-code-3',
-    // openaiModel: 'voyage-3.5-lite',
+    // openaiModel: 'Qwen/Qwen3-Embedding-8B', // dimension 4096
+    // openaiModel: 'Qwen/Qwen3-Embedding-4B', // dimension 2560
+    // openaiModel: 'Qwen/Qwen3-Embedding-0.6B', // dimension 1024
+    // openaiModel: 'Pro/BAAI/bge-m3', // dimension 1024
+    // openaiModel: 'BAAI/bge-large-en-v1.5', // dimension 1024
+    // openaiModel: 'netease-youdao/bce-embedding-base_v1', // dimension 1024
+    // openaiModel: 'morph-embedding-v2', // dimension 1536
+    // openaiModel: 'text-embedding-ada-002', // dimension 1536
+    // openaiModel: 'text-embedding-3-small', // dimension 1536
+    // openaiModel: 'text-embedding-3-large', // dimension 3072
+    // openaiModel: 'voyage-3-large', // dimension 1024
+    // openaiModel: 'voyage-3.5', // dimension 1024
+    // openaiModel: 'voyage-code-3', // dimension 1024
+    // openaiModel: 'voyage-3.5-lite', // dimension 1024
     // openaiModel: 'taylor-jones/bge-code-v1-Q8_0-GGUF', // lmstudio dimension 1536
     // openaiModel: 'nomic-ai/nomic-embed-text-v1.5-GGUF@Q4_K_M', // lmstudio dimension 768
     // openaiModel: 'wsxiaoys/jina-embeddings-v2-base-code-Q8_0-GGUF', // lmstudio dimension 768
@@ -112,8 +113,19 @@ async function runEmbeddingTest() {
     type: 'openai' as const
   }
 
-  const vectorSearch = new MemoryVectorSearch(ollamaConfig)
-  // const vectorSearch = new MemoryVectorSearch(openaiConfig)
+  // const vectorSearch = new MemoryVectorSearch({
+  //   provider: 'ollama',
+  //   baseUrl: 'http://localhost:11434',
+  //   model: 'dengcao/Qwen3-Embedding-0.6B:Q8_0',
+  //   dimension: 1024,
+  // })
+  const vectorSearch = new MemoryVectorSearch({
+    provider: 'openai-compatible',
+    apiKey: 'sk-USqYzFUmccukXK0jC392D995Aa4b4a2d9c49892c37E323B7',
+    baseUrl: 'http://localhost:2302/v1',
+    model: 'Qwen/Qwen3-Embedding-8B',
+    dimension: 1024,
+  })
 
   // 添加模拟数据
   console.log('📦 添加模拟包数据...')
@@ -219,6 +231,7 @@ async function runEmbeddingTest() {
     // 强制退出进程（这是最可靠的方法）
     console.log('✅ 清理完成，程序即将退出')
     process.exit(0)
+    globalDispatcher.destroy()
 
   } catch (error) {
     console.warn('⚠️ 清理连接池时出现警告:', error)

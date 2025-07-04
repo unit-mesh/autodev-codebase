@@ -25,7 +25,7 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
     demo: false,
     ollamaUrl: 'http://localhost:11434',
     qdrantUrl: 'http://localhost:6333',
-    model: 'nomic-embed-text',
+    model: '',
     logLevel: 'error',
     help: false,
     mcpServer: false,
@@ -116,7 +116,7 @@ Stdio Adapter Options:
 
   --ollama-url=<url>      Ollama API URL (default: http://localhost:11434)
   --qdrant-url=<url>      Qdrant vector DB URL (default: http://localhost:6333)
-  --model=<model>         Embedding model (default: nomic-embed-text)
+  --model=<model>         Embedding model (default: dengcao/Qwen3-Embedding-0.6B:Q8_0)
 
   --config=<path>         Config file path
   --storage=<path>        Storage directory path

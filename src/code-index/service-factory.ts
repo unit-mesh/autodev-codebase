@@ -75,7 +75,7 @@ export class CodeIndexServiceFactory {
 			)
 		}
 
-		throw new Error(`Invalid embedder provider configured: ${embedderConfig.provider}`)
+		throw new Error(`Invalid embedder provider configured: ${(embedderConfig as any)?.provider}`)
 	}
 
 	/**

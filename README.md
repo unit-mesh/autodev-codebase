@@ -32,7 +32,7 @@ brew install ollama
 ollama serve
 
 # In a new terminal, pull the embedding model
-ollama pull nomic-embed-text
+ollama pull dengcao/Qwen3-Embedding-0.6B:Q8_0
 ```
 
 ### 2. Install ripgrep

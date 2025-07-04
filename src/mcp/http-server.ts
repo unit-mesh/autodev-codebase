@@ -44,12 +44,12 @@ export class CodebaseHTTPMCPServer {
         // Register search_codebase tool
         this.mcpServer.tool(
             'search_codebase',
-            'Search the codebase using semantic vector search to find relevant code snippets, functions, and documentation.',
+            "Search the codebase using semantic vector search to find relevant code snippets.",
             {
-                query: z.string().describe('The search query to find relevant code'),
-                limit: z.number().optional().default(20).describe('Maximum number of results to return (default: 10)'),
+                query: z.string().describe("An English complete question about what you want to understand. Ask as if talking to a colleague: 'How does X work?', 'What happens when Y?', 'Where is Z handled?'"),
+                limit: z.number().optional().default(10).describe('Maximum number of results to return (default: 10)'),
                 filters: z.object({
-                    pathFilters: z.array(z.string()).optional().describe('Filter by path strings - directories, extensions, file names, Case sensitive (e.g., ["src/", ".ts", "components"])'),
+                    pathFilters: z.array(z.string()).optional().describe("Filter by path strings – directories, extensions, or file names. Case sensitive. This is NOT glob matching; wildcards and patterns (e.g., *, ?, []) are not supported. You can specify file paths here to perform semantic search within large files. Example: ['src/index.js', '.ts', 'src/', 'components']"),
                     minScore: z.number().optional().describe('Minimum similarity score threshold (0-1)，default 0.4')
                 }).optional().describe('Optional filters for file types, paths, etc.')
             },

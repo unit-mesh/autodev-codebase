@@ -45,7 +45,7 @@ export interface LanguageParser {
  */
 function findWasmFile(langName: string): string {
 	const fileName = `tree-sitter-${langName}.wasm`
-	
+
 	// 确定当前模块的基础路径
 	let basePath: string
 	if (typeof import.meta !== 'undefined' && import.meta.url) {
@@ -60,7 +60,7 @@ function findWasmFile(langName: string): string {
 		// 降级处理：使用当前工作目录
 		basePath = process.cwd()
 	}
-	
+
 	// 可能的文件位置（按优先级排序）
 	const possiblePaths = [
 		// 1. 当前模块目录（开发环境，WASM 文件被复制到这里）
@@ -68,7 +68,7 @@ function findWasmFile(langName: string): string {
 		// 2. 打包后的情况：相对于 dist/index.js 找到 dist/tree-sitter/
 		path.join(basePath, 'tree-sitter', fileName)
 	]
-	
+
 	// 逐个检查文件是否存在
 	for (const [index, filePath] of possiblePaths.entries()) {
 		try {
@@ -81,7 +81,7 @@ function findWasmFile(langName: string): string {
 			continue
 		}
 	}
-	
+
 	// 如果都找不到，抛出详细的错误信息
 	const error = new Error(`无法找到 WASM 文件: ${fileName}`)
 	;(error as any).details = {
@@ -96,7 +96,7 @@ function findWasmFile(langName: string): string {
 
 function findCoreTreeSitterWasm(): string {
 	const fileName = 'tree-sitter.wasm'
-	
+
 	// 确定当前模块的基础路径
 	let basePath: string
 	if (typeof import.meta !== 'undefined' && import.meta.url) {
@@ -111,7 +111,7 @@ function findCoreTreeSitterWasm(): string {
 		// 降级处理：使用当前工作目录
 		basePath = process.cwd()
 	}
-	
+
 	// 可能的文件位置（按优先级排序）
 	const possiblePaths = [
 		// 1. 打包后的 dist 目录根（优先）
@@ -129,7 +129,7 @@ function findCoreTreeSitterWasm(): string {
 		// 7. node_modules 中的文件（开发环境备选）
 		path.join(process.cwd(), 'node_modules', 'web-tree-sitter', fileName),
 	]
-	
+
 	// 逐个检查文件是否存在
 	for (const filePath of possiblePaths) {
 		try {
@@ -142,7 +142,7 @@ function findCoreTreeSitterWasm(): string {
 			continue
 		}
 	}
-	
+
 	// 如果都找不到，抛出详细的错误信息
 	const error = new Error(`无法找到核心 tree-sitter WASM 文件: ${fileName}`)
 	;(error as any).details = {
@@ -173,13 +173,13 @@ async function initializeParser() {
 	if (isParserInitialized) {
 		return
 	}
-	
+
 	// If initialization is in progress, wait for it to complete
 	if (initializationPromise) {
 		await initializationPromise
 		return
 	}
-	
+
 	// Start initialization
 	initializationPromise = (async () => {
 		// console.log("🌲 Initializing tree-sitter parser...\n")
@@ -195,14 +195,14 @@ async function initializeParser() {
 		})
 		isParserInitialized = true
 	})()
-	
+
 	await initializationPromise
 	initializationPromise = null
 }
 
 /*
-Using node bindings for tree-sitter is problematic in vscode extensions 
-because of incompatibility with electron. Going the .wasm route has the 
+Using node bindings for tree-sitter is problematic in vscode extensions
+because of incompatibility with electron. Going the .wasm route has the
 advantage of not having to build for multiple architectures.
 
 We use web-tree-sitter and tree-sitter-wasms which provides auto-updating prebuilt WASM binaries for tree-sitter's language parsers.
@@ -234,6 +234,7 @@ export async function loadRequiredLanguageParsers(filesToParse: string[]): Promi
 			let parserKey = ext // Default to using extension as key
 			switch (ext) {
 				case "js":
+				case "mjs":
 				case "jsx":
 				case "json":
 					language = await loadLanguage("javascript")

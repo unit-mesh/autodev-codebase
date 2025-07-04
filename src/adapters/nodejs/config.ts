@@ -4,19 +4,38 @@
  */
 import * as path from 'path'
 import { IConfigProvider, EmbedderConfig, VectorStoreConfig, SearchConfig } from '../../abstractions/config'
-import { CodeIndexConfig } from '../../code-index/interfaces/config'
+import { CodeIndexConfig, OllamaEmbedderConfig } from '../../code-index/interfaces/config'
 import { EmbedderProvider } from '../../code-index/interfaces/manager'
 import { IFileSystem, IEventBus } from '../../abstractions/core'
 
 export interface NodeConfigOptions {
   configPath?: string
   defaultConfig?: Partial<CodeIndexConfig>
+  cliOverrides?: {
+    ollamaUrl?: string
+    model?: string
+    qdrantUrl?: string
+  }
 }
+
+// Default configuration constants
+const DEFAULT_CONFIG: CodeIndexConfig = {
+  isEnabled: true,
+  isConfigured: true,
+  embedder: {
+    provider: "ollama",
+    model: "dengcao/Qwen3-Embedding-0.6B:Q8_0",
+    dimension: 1024,
+    baseUrl: "http://localhost:11434",
+  }
+}
+
 
 export class NodeConfigProvider implements IConfigProvider {
   private configPath: string
   private config: CodeIndexConfig | null = null
   private changeCallbacks: Array<(config: CodeIndexConfig) => void> = []
+  private cliOverrides: NodeConfigOptions['cliOverrides']
 
   constructor(
     private fileSystem: IFileSystem,
@@ -24,17 +43,11 @@ export class NodeConfigProvider implements IConfigProvider {
     options: NodeConfigOptions = {}
   ) {
     this.configPath = options.configPath || './autodev-config.json'
+    this.cliOverrides = options.cliOverrides
 
     // Set default configuration
     this.config = {
-      isEnabled: false,
-      isConfigured: false,
-      embedder: {
-        provider: "openai",
-        apiKey: "",
-        model: "text-embedding-3-small",
-        dimension: 1536
-      },
+      ...DEFAULT_CONFIG,
       ...options.defaultConfig
     }
   }
@@ -74,7 +87,7 @@ export class NodeConfigProvider implements IConfigProvider {
     // Fallback
     return {
       provider: "ollama",
-      modelId: "nomic-embed-text"
+      modelId: DEFAULT_CONFIG.embedder.model
     }
   }
 
@@ -118,27 +131,30 @@ export class NodeConfigProvider implements IConfigProvider {
    * Load configuration from file
    */
   async loadConfig(): Promise<CodeIndexConfig> {
+    // console.log(`Attempting to load config from: ${this.configPath}`)
     try {
       if (await this.fileSystem.exists(this.configPath)) {
         const content = await this.fileSystem.readFile(this.configPath)
         const text = new TextDecoder().decode(content)
         const fileConfig = JSON.parse(text)
 
-        // Handle legacy configuration format migration
-        if (fileConfig.embedderProvider && !fileConfig.embedder) {
-          fileConfig.embedder = this.migrateLegacyConfig(fileConfig)
-        }
 
         this.config = {
-          isEnabled: false,
-          isConfigured: false,
-          embedder: {
-            provider: "ollama",
-            apiKey: "",
-            model: "nomic-embed-text",
-            dimension: 768
-          },
+          ...DEFAULT_CONFIG,
           ...fileConfig
+        }
+
+        // Apply CLI overrides
+        if (this.cliOverrides && this.config) {
+          if (this.cliOverrides.ollamaUrl && 'baseUrl' in this.config.embedder) {
+            this.config.embedder.baseUrl = this.cliOverrides.ollamaUrl
+          }
+          if (this.cliOverrides.model && this.cliOverrides.model.trim()) {
+            this.config.embedder.model = this.cliOverrides.model
+          }
+          if (this.cliOverrides.qdrantUrl) {
+            this.config.qdrantUrl = this.cliOverrides.qdrantUrl
+          }
         }
 
         // Auto-determine isConfigured based on provider requirements
@@ -148,73 +164,33 @@ export class NodeConfigProvider implements IConfigProvider {
       console.warn(`Failed to load config from ${this.configPath}:`, error)
     }
 
-    return this.config || {
-      isEnabled: false,
-      isConfigured: false,
-      embedder: {
-        provider: "ollama",
-        apiKey: "",
-        model: "nomic-embed-text",
-        dimension: 768
+    // Apply CLI overrides even if config file doesn't exist
+    if (this.cliOverrides && this.config) {
+      if (this.cliOverrides.ollamaUrl && 'baseUrl' in this.config.embedder) {
+        this.config.embedder.baseUrl = this.cliOverrides.ollamaUrl
+      }
+      if (this.cliOverrides.model && this.cliOverrides.model.trim()) {
+        this.config.embedder.model = this.cliOverrides.model
+      }
+      if (this.cliOverrides.qdrantUrl) {
+        this.config.qdrantUrl = this.cliOverrides.qdrantUrl
       }
     }
+
+    // console.log(`Current configuration:`, this.config, DEFAULT_CONFIG)
+    return this.config || { ...DEFAULT_CONFIG }
   }
 
-  /**
-   * Migrate legacy configuration format to new structure
-   */
-  private migrateLegacyConfig(oldConfig: any): any {
-    const provider = oldConfig.embedderProvider
-
-    if (provider === "ollama") {
-      return {
-        provider: "ollama",
-        baseUrl: oldConfig.ollamaOptions?.ollamaBaseUrl || "http://localhost:11434",
-        model: oldConfig.modelId || oldConfig.ollamaModel || "nomic-embed-text",
-        dimension: oldConfig.modelDimension || 768
-      }
-    } else if (provider === "openai") {
-      return {
-        provider: "openai",
-        apiKey: oldConfig.openAiOptions?.openAiNativeApiKey || "",
-        model: oldConfig.modelId || "text-embedding-3-small",
-        dimension: oldConfig.modelDimension || 1536
-      }
-    } else if (provider === "openai-compatible") {
-      return {
-        provider: "openai-compatible",
-        baseUrl: oldConfig.openAiCompatibleOptions?.baseUrl || "",
-        apiKey: oldConfig.openAiCompatibleOptions?.apiKey || "",
-        model: oldConfig.modelId || "text-embedding-3-small",
-        dimension: oldConfig.openAiCompatibleOptions?.modelDimension || 1536
-      }
-    }
-
-    // Default fallback
-    return {
-      provider: "ollama",
-      apiKey: "",
-      model: "nomic-embed-text",
-      dimension: 768
-    }
-  }
 
   /**
    * Save configuration to file
    */
   async saveConfig(config: Partial<CodeIndexConfig>): Promise<void> {
     try {
-      const newConfig: CodeIndexConfig = { 
-        isEnabled: true,
-        isConfigured: true,
-        embedder: {
-          provider: "ollama",
-          apiKey: "",
-          model: "nomic-embed-text",
-          dimension: 768
-        },
-        ...this.config, 
-        ...config 
+      const newConfig: CodeIndexConfig = {
+        ...DEFAULT_CONFIG,
+        ...this.config,
+        ...config
       }
       const content = JSON.stringify(newConfig, null, 2)
       const encoded = new TextEncoder().encode(content)
@@ -253,18 +229,7 @@ export class NodeConfigProvider implements IConfigProvider {
    * Reset configuration to defaults
    */
   async resetConfig(): Promise<void> {
-    const defaultConfig: CodeIndexConfig = {
-      isEnabled: false,
-      isConfigured: false,
-      embedder: {
-        provider: "ollama",
-        apiKey: "",
-        model: "nomic-embed-text",
-        dimension: 768
-      }
-    }
-
-    await this.saveConfig(defaultConfig)
+    await this.saveConfig({ ...DEFAULT_CONFIG })
   }
 
   /**

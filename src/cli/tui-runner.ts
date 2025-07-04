@@ -50,15 +50,9 @@ export function createTUIApp(options: CliOptions) {
           },
           configOptions: {
             configPath,
-            defaultConfig: {
-              isEnabled: true,
-              isConfigured: true,
-              embedder: {
-                provider: "ollama" as const,
-                baseUrl: options.ollamaUrl,
-                model: options.model || "dengcao/Qwen3-Embedding-0.6B:f16",
-                dimension: 1024
-              },
+            cliOverrides: {
+              ollamaUrl: options.ollamaUrl,
+              model: options.model,
               qdrantUrl: options.qdrantUrl
             }
           }
@@ -81,7 +75,6 @@ export function createTUIApp(options: CliOptions) {
           deps.logger?.info('[tui-runner]⚙️ Loading configuration...');
           const config = await deps.configProvider.loadConfig();
           deps.logger?.info('[tui-runner]📝 Configuration:', JSON.stringify(config, null, 2));
-
           deps.logger?.info('[tui-runner]✅ Validating configuration...');
           const validation = await deps.configProvider.validateConfig();
           deps.logger?.info('[tui-runner]📝 Validation result:', validation);
@@ -268,15 +261,9 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
     },
     configOptions: {
       configPath,
-      defaultConfig: {
-        isEnabled: true,
-        isConfigured: true,
-        embedder: {
-          provider: "ollama" as const,
-          baseUrl: options.ollamaUrl,
-          model: options.model || "dengcao/Qwen3-Embedding-0.6B:f16",
-          dimension: 1024
-        },
+      cliOverrides: {
+        ollamaUrl: options.ollamaUrl,
+        model: options.model,
         qdrantUrl: options.qdrantUrl
       }
     }

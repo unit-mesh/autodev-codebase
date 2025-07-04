@@ -37,11 +37,11 @@ async function main() {
       defaultConfig: {
         isEnabled: true,
         isConfigured: true,
-        embedderProvider: "ollama",
-        modelId: OLLAMA_MODEL,
-        ollamaOptions: {
-          ollamaBaseUrl: OLLAMA_BASE_URL,
-          apiKey: '',
+        embedder: {
+          provider: "ollama",
+          model: OLLAMA_MODEL,
+          baseUrl: OLLAMA_BASE_URL,
+          dimension: 768,
         },
         qdrantUrl: QDRANT_URL
       }

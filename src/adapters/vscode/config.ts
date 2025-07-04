@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
-import { IConfigProvider, EmbedderConfig, VectorStoreConfig, SearchConfig, CodeIndexConfig, ConfigSnapshot } from '../../abstractions/config'
-import { EmbedderProvider } from '../../code-index/interfaces/manager'
+import { IConfigProvider, VectorStoreConfig, SearchConfig, CodeIndexConfig, ConfigSnapshot } from '../../abstractions/config'
+import { EmbedderConfig, OllamaEmbedderConfig, OpenAIEmbedderConfig, OpenAICompatibleEmbedderConfig } from '../../code-index/interfaces/config'
 
 /**
  * VSCode configuration adapter implementing IConfigProvider interface
@@ -13,13 +13,32 @@ export class VSCodeConfigProvider implements IConfigProvider {
 
   async getEmbedderConfig(): Promise<EmbedderConfig> {
     const config = this.workspace.getConfiguration(this.configSection)
-    
-    return {
-      provider: config.get<EmbedderProvider>('embedder.provider', 'openai'),
-      modelId: config.get<string>('embedder.modelId'),
-      openAiOptions: config.get('embedder.openAi'),
-      ollamaOptions: config.get('embedder.ollama'),
-      openAiCompatibleOptions: config.get('embedder.openAiCompatible')
+    const provider = config.get<string>('embedder.provider', 'openai')
+
+    switch (provider) {
+      case 'ollama':
+        return config.get<OllamaEmbedderConfig>('embedder', {
+          provider: 'ollama',
+          model: 'nomic-embed-text',
+          dimension: 768,
+          baseUrl: 'http://localhost:11434',
+        })
+      case 'openai-compatible':
+        return config.get<OpenAICompatibleEmbedderConfig>('embedder', {
+          provider: 'openai-compatible',
+          model: 'text-embedding-3-small',
+          dimension: 1536,
+          baseUrl: '',
+          apiKey: '',
+        })
+      case 'openai':
+      default:
+        return config.get<OpenAIEmbedderConfig>('embedder', {
+          provider: 'openai',
+          model: 'text-embedding-3-small',
+          dimension: 1536,
+          apiKey: '',
+        })
     }
   }
 
@@ -71,14 +90,12 @@ export class VSCodeConfigProvider implements IConfigProvider {
       this.getSearchConfig()
     ])
 
+    const isConfigured = this.isConfigured(embedderConfig, vectorStoreConfig)
+
     return {
       isEnabled: this.isCodeIndexEnabled(),
-      isConfigured: this.isConfigured(embedderConfig, vectorStoreConfig),
-      embedderProvider: embedderConfig.provider,
-      modelId: embedderConfig.modelId,
-      openAiOptions: embedderConfig.openAiOptions,
-      ollamaOptions: embedderConfig.ollamaOptions,
-      openAiCompatibleOptions: embedderConfig.openAiCompatibleOptions,
+      isConfigured,
+      embedder: embedderConfig,
       qdrantUrl: vectorStoreConfig.qdrantUrl,
       qdrantApiKey: vectorStoreConfig.qdrantApiKey,
       searchMinScore: searchConfig.minScore
@@ -91,19 +108,27 @@ export class VSCodeConfigProvider implements IConfigProvider {
   async getConfigSnapshot(): Promise<ConfigSnapshot> {
     const config = await this.getFullConfig()
     
-    return {
+    const snapshot: ConfigSnapshot = {
       enabled: config.isEnabled,
       configured: config.isConfigured,
-      embedderProvider: config.embedderProvider,
-      modelId: config.modelId,
-      openAiKey: config.openAiOptions?.apiKey,
-      ollamaBaseUrl: config.ollamaOptions?.baseUrl,
-      openAiCompatibleBaseUrl: config.openAiCompatibleOptions?.baseUrl,
-      openAiCompatibleApiKey: config.openAiCompatibleOptions?.apiKey,
-      openAiCompatibleModelDimension: config.openAiCompatibleOptions?.modelDimension,
+      embedderProvider: config.embedder.provider,
+      modelId: config.embedder.model,
       qdrantUrl: config.qdrantUrl,
       qdrantApiKey: config.qdrantApiKey
     }
+
+    if (config.embedder.provider === 'openai') {
+      snapshot.openAiKey = (config.embedder as OpenAIEmbedderConfig).apiKey
+    } else if (config.embedder.provider === 'ollama') {
+      snapshot.ollamaBaseUrl = (config.embedder as OllamaEmbedderConfig).baseUrl
+    } else if (config.embedder.provider === 'openai-compatible') {
+      const compatibleConfig = config.embedder as OpenAICompatibleEmbedderConfig
+      snapshot.openAiCompatibleBaseUrl = compatibleConfig.baseUrl
+      snapshot.openAiCompatibleApiKey = compatibleConfig.apiKey
+      snapshot.openAiCompatibleModelDimension = compatibleConfig.dimension
+    }
+    
+    return snapshot
   }
 
   private isConfigured(embedderConfig: EmbedderConfig, vectorStoreConfig: VectorStoreConfig): boolean {
@@ -111,7 +136,7 @@ export class VSCodeConfigProvider implements IConfigProvider {
     const embedderConfigured = this.isEmbedderConfigured(embedderConfig)
     
     // Check if vector store is configured (if using external vector store)
-    const vectorStoreConfigured = vectorStoreConfig.qdrantUrl ? !!vectorStoreConfig.qdrantUrl : true
+    const vectorStoreConfigured = !!vectorStoreConfig.qdrantUrl
     
     return embedderConfigured && vectorStoreConfigured
   }
@@ -119,11 +144,12 @@ export class VSCodeConfigProvider implements IConfigProvider {
   private isEmbedderConfigured(config: EmbedderConfig): boolean {
     switch (config.provider) {
       case 'openai':
-        return !!(config.openAiOptions?.apiKey)
+        return !!(config as OpenAIEmbedderConfig).apiKey
       case 'ollama':
-        return !!(config.ollamaOptions?.baseUrl)
+        return !!(config as OllamaEmbedderConfig).baseUrl
       case 'openai-compatible':
-        return !!(config.openAiCompatibleOptions?.baseUrl && config.openAiCompatibleOptions?.apiKey)
+        const compatibleConfig = config as OpenAICompatibleEmbedderConfig
+        return !!(compatibleConfig.baseUrl && compatibleConfig.apiKey)
       default:
         return false
     }

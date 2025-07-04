@@ -37,9 +37,11 @@ export async function basicUsageExample() {
   await dependencies.configProvider.saveConfig({
     isEnabled: true,
     isConfigured: true,
-    embedderProvider: "openai",
-    openAiOptions: {
-      apiKey: process.env['OPENAI_API_KEY'] || 'your-api-key-here'
+    embedder: {
+      provider: "openai",
+      apiKey: process.env['OPENAI_API_KEY'] || 'your-api-key-here',
+      model: 'text-embedding-3-small',
+      dimension: 1536,
     },
     qdrantUrl: 'http://localhost:6333'
   })
@@ -71,10 +73,11 @@ export async function advancedUsageExample() {
       configPath: path.join(workspacePath, '.autodev-config.json'),
       defaultConfig: {
         isEnabled: true,
-        embedderProvider: "ollama",
-        ollamaOptions: {
+        embedder: {
+          provider: "ollama",
           baseUrl: 'http://localhost:11434',
-          apiKey: ''
+          model: 'nomic-embed-text',
+          dimension: 768,
         }
       }
     }
@@ -207,7 +210,12 @@ export async function cliExample() {
       await dependencies.configProvider.saveConfig({
         isEnabled: true,
         isConfigured: false,
-        embedderProvider: "ollama"
+        embedder: {
+          provider: "ollama",
+          baseUrl: 'http://localhost:11434',
+          model: 'nomic-embed-text',
+          dimension: 768,
+        }
       })
       console.log('Configuration initialized')
       break
@@ -217,7 +225,7 @@ export async function cliExample() {
       console.log('Code Index Status:')
       console.log('  Enabled:', config.isEnabled)
       console.log('  Configured:', config.isConfigured)
-      console.log('  Provider:', config.embedderProvider)
+      console.log('  Provider:', config.embedder.provider)
       break
 
     case 'files':

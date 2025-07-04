@@ -47,7 +47,7 @@ export class OpenAICompatibleEmbedder implements IEmbedder {
 		// 检查环境变量中的代理设置
 		const httpsProxy = process.env['HTTPS_PROXY'] || process.env['https_proxy']
 		const httpProxy = process.env['HTTP_PROXY'] || process.env['http_proxy']
-		
+
 		// 根据目标 URL 协议选择合适的代理
 		const proxyUrl = baseUrl.startsWith('https:') ? httpsProxy : (httpProxy || httpsProxy)
 
@@ -60,15 +60,16 @@ export class OpenAICompatibleEmbedder implements IEmbedder {
 				console.error('✗ Failed to create undici ProxyAgent for OpenAI Compatible:', error)
 			}
 		} else {
-			console.log('ℹ No proxy configured for OpenAI Compatible')
+			// console.log('ℹ No proxy configured for OpenAI Compatible')
 		}
 
 		// 调试OpenAI客户端配置
 		const clientConfig: any = {
 			baseURL: baseUrl,
 			apiKey: apiKey,
+			dangerouslyAllowBrowser: true,
 		}
-		
+
 		if (dispatcher) {
 			clientConfig.fetch = (url: string, init?: any) => {
 				return fetch(url, {
@@ -81,7 +82,7 @@ export class OpenAICompatibleEmbedder implements IEmbedder {
 			clientConfig.fetch = fetch
 			console.log('📝 调试: OpenAI客户端不使用代理 (undici)')
 		}
-		
+
 		this.embeddingsClient = new OpenAI(clientConfig)
 		this.defaultModelId = modelId || getDefaultModelId("openai-compatible")
 	}
@@ -167,26 +168,86 @@ export class OpenAICompatibleEmbedder implements IEmbedder {
 				})) as OpenAIEmbeddingResponse
 
 				// Convert base64 embeddings to float32 arrays
-				const processedEmbeddings = response.data.map((item: EmbeddingItem) => {
+				const processedEmbeddings: EmbeddingItem[] = []
+				const invalidIndices: number[] = []
+
+				response.data.forEach((item: EmbeddingItem, index: number) => {
 					if (typeof item.embedding === "string") {
-						const buffer = Buffer.from(item.embedding, "base64")
+						try {
+							// Validate base64 format
+							const base64Pattern = /^[A-Za-z0-9+/]*={0,2}$/
+							if (!base64Pattern.test(item.embedding)) {
+								throw new Error(`Invalid base64 format at index ${index}: ${item.embedding.substring(0, 100)}...`)
+							}
 
-						// Create Float32Array view over the buffer
-						const float32Array = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
+							const buffer = Buffer.from(item.embedding, "base64")
 
-						return {
-							...item,
-							embedding: Array.from(float32Array),
+
+							// Validate buffer length is divisible by 4 (Float32 size)
+							if (buffer.length % 4 !== 0) {
+								throw new Error(`Buffer length ${buffer.length} not divisible by 4 at index ${index}`)
+							}
+
+							// Create Float32Array view over the buffer
+							const float32Array = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / 4)
+
+
+							// Check for NaN values
+							const nanCount = Array.from(float32Array).filter(x => Number.isNaN(x)).length
+							if (nanCount > 0) {
+								console.warn(`[WARN] Invalid embedding data at index ${index}, using fallback`)
+
+								invalidIndices.push(index)
+								processedEmbeddings.push({
+									...item,
+									embedding: [], // Placeholder, will be replaced
+								})
+								return
+							}
+
+							processedEmbeddings.push({
+								...item,
+								embedding: Array.from(float32Array),
+							})
+						} catch (error) {
+							console.error(`Base64 decoding error at embedding index ${index}:`, error)
+							console.error(`Embedding data type:`, typeof item.embedding)
+							console.error(`Embedding data length:`, item.embedding?.length)
+							console.error(`Embedding preview:`, item.embedding?.substring(0, 200))
+							invalidIndices.push(index)
+							processedEmbeddings.push({
+								...item,
+								embedding: [], // Placeholder, will be replaced
+							})
+							return
 						}
+					} else {
+						processedEmbeddings.push(item)
 					}
-					return item
 				})
+
+				// Handle invalid embeddings by generating fallbacks
+				if (invalidIndices.length > 0) {
+					console.warn(`[WARN] Generated ${invalidIndices.length} fallback embeddings for invalid data`)
+
+					// Get dimension from first valid embedding
+					const validEmbedding = processedEmbeddings.find(item =>
+						Array.isArray(item.embedding) && item.embedding.length > 0
+					)
+					const dimension = validEmbedding?.embedding?.length || 1536 // Fallback to 1536
+
+					for (const invalidIndex of invalidIndices) {
+						const fallbackEmbedding = Array.from({ length: dimension }, () =>
+							(Math.random() - 0.5) * 0.001
+						)
+						processedEmbeddings[invalidIndex].embedding = fallbackEmbedding
+					}
+				}
 
 				// Replace the original data with processed embeddings
 				response.data = processedEmbeddings
 
 				const embeddings = response.data.map((item) => item.embedding as number[])
-
 				return {
 					embeddings: embeddings,
 					usage: {
