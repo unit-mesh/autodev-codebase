@@ -1,6 +1,7 @@
 import React from 'react';
 import { render } from 'ink';
 import { parseArgs, printHelp } from './cli/args-parser';
+import { CodeIndexManager } from './code-index/manager';
 
 // CLI entry point - exported for use by cli.ts
 export async function main() {
@@ -10,6 +11,30 @@ export async function main() {
     printHelp();
     process.exit(0);
   }
+
+  // Add cleanup on process exit to dispose singleton instances
+  const cleanup = () => {
+    try {
+      CodeIndexManager.disposeAll();
+    } catch (error) {
+      // Ignore cleanup errors during exit
+    }
+  };
+
+  process.on('exit', cleanup);
+  process.on('SIGINT', () => {
+    cleanup();
+    process.exit(0);
+  });
+  process.on('SIGTERM', () => {
+    cleanup();
+    process.exit(0);
+  });
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+    cleanup();
+    process.exit(1);
+  });
 
   // console.log('CLI options: ', options);
 

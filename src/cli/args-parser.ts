@@ -1,6 +1,7 @@
 export interface CliOptions {
   path: string;
   demo: boolean;
+  force: boolean;
   ollamaUrl: string;
   qdrantUrl: string;
   model: string;
@@ -23,6 +24,7 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
   const options: CliOptions = {
     path: process.cwd(),
     demo: false,
+    force: false,
     ollamaUrl: 'http://localhost:11434',
     qdrantUrl: 'http://localhost:6333',
     model: '',
@@ -53,6 +55,8 @@ export function parseArgs(argv: string[] = process.argv): CliOptions {
       options.help = true;
     } else if (arg === '--demo') {
       options.demo = true;
+    } else if (arg === '--force') {
+      options.force = true;
     } else if (arg === '--mcp-server') {
       options.mcpServer = true;
     } else if (arg.startsWith('--path=')) {
@@ -105,6 +109,7 @@ Usage:
 Options:
   --path=<path>           Workspace path (default: current directory)
   --demo                  Create demo files in workspace
+  --force                 Force reindex all files, ignoring cache
 
 MCP Server Options:
   --port=<port>           HTTP server port (default: 3001)
@@ -122,6 +127,7 @@ Stdio Adapter Options:
   --storage=<path>        Storage directory path
   --cache=<path>          Cache directory path
   --log-level=<level>     Log level: error|warn|info|debug (default: error)
+  --force                 Force reindex all files, ignoring cache
 
   --help, -h              Show this help
 
@@ -129,12 +135,14 @@ Examples:
   # TUI mode
   codebase --path=/my/project
   codebase --demo --log-level=info
+  codebase --force --path=/my/project    # Force reindex
 
   # MCP Server mode (long-running)
   cd /my/project
   codebase mcp-server                   # Use current directory
   codebase mcp-server --port=3001       # Custom port
   codebase mcp-server --path=/workspace # Explicit path
+  codebase mcp-server --force           # Force reindex in server mode
 
   # Stdio Adapter mode
   codebase stdio-adapter                                      # Connect to default SSE endpoint

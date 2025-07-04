@@ -238,6 +238,16 @@ export class CodeIndexOrchestrator {
 			try {
 				if (this.configManager.isFeatureConfigured) {
 					await this.vectorStore.deleteCollection()
+					
+					// Add a small delay to ensure deletion is fully completed in Qdrant
+					await new Promise(resolve => setTimeout(resolve, 500))
+					this.info("[CodeIndexOrchestrator] Collection deletion completed, waiting for propagation...")
+					
+					// Immediately reinitialize the vector store to recreate the collection
+					// This prevents any timing window where the collection doesn't exist
+					this.info("[CodeIndexOrchestrator] Reinitializing vector store after deletion...")
+					await this.vectorStore.initialize()
+					this.info("[CodeIndexOrchestrator] Vector store reinitialized successfully")
 				} else {
 					this.warn("[CodeIndexOrchestrator] Service not configured, skipping vector collection clear.")
 				}
