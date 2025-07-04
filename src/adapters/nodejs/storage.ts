@@ -6,6 +6,9 @@ import * as path from 'path'
 import * as os from 'os'
 import { IStorage } from '../../abstractions/core'
 
+// 🎯 DEFAULT CACHE LOCATION - Change this line to modify cache location globally
+const DEFAULT_CACHE_BASE = path.join(os.homedir(), '.autodev-cache')  // Change to your preferred default location
+
 export interface NodeStorageOptions {
   globalStoragePath?: string
   cacheBasePath?: string
@@ -17,7 +20,7 @@ export class NodeStorage implements IStorage {
 
   constructor(options: NodeStorageOptions = {}) {
     this.globalStoragePath = options.globalStoragePath || path.join(os.homedir(), '.autodev', 'codebase')
-    this.cacheBasePath = options.cacheBasePath || this.globalStoragePath
+    this.cacheBasePath = options.cacheBasePath || DEFAULT_CACHE_BASE
   }
 
   getGlobalStorageUri(): string {

@@ -59,8 +59,8 @@ export class BatchProcessor<T> {
 			// Phase 1: Handle deletions if needed (even if items is empty)
 			if (options.getFilesToDelete) {
 				const filesToDelete = options.getFilesToDelete(items)
-				console.log(`[BatchProcessor] Files to delete: ${filesToDelete.length}`, filesToDelete)
 				if (filesToDelete.length > 0) {
+					console.log(`[BatchProcessor] Files to delete: ${filesToDelete.length}`, filesToDelete)
 					await this.handleDeletions(filesToDelete, options, result)
 				}
 			}

@@ -28,7 +28,6 @@ const AppWithData: React.FC = () => {
         workspacePath: DEMO_FOLDER,
         storageOptions: {
           globalStoragePath: path.join(process.cwd(), '.autodev-storage'),
-          cacheBasePath: path.join(process.cwd(), '.autodev-cache')
         },
         loggerOptions: {
           name: 'Demo-Codebase-TUI',

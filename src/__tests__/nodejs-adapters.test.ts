@@ -115,7 +115,7 @@ describe('Node.js Adapters Integration', () => {
       })
 
       expect(storage.getGlobalStorageUri()).toBe(customPath)
-      expect(storage.getCacheBasePath()).toBe(customPath)
+      expect(storage.getCacheBasePath()).toBe(require('os').homedir()) // Now defaults to home directory
     })
   })
 

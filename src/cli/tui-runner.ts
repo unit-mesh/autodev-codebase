@@ -40,7 +40,7 @@ export function createTUIApp(options: CliOptions) {
           workspacePath,
           storageOptions: {
             globalStoragePath: options.storage || path.join(process.cwd(), '.autodev-storage'),
-            cacheBasePath: options.cache || path.join(process.cwd(), '.autodev-cache')
+            ...(options.cache && { cacheBasePath: options.cache })
           },
           loggerOptions: {
             name: 'Autodev-Codebase-TUI',
@@ -276,7 +276,7 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
     workspacePath,
     storageOptions: {
       globalStoragePath: options.storage || path.join(process.cwd(), '.autodev-storage'),
-      cacheBasePath: options.cache || path.join(process.cwd(), '.autodev-cache')
+      ...(options.cache && { cacheBasePath: options.cache })
     },
     loggerOptions: {
       name: 'Autodev-Codebase-MCP',
