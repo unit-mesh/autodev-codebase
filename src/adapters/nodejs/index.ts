@@ -11,6 +11,9 @@ export { NodeFileWatcher } from './file-watcher'
 export { NodeWorkspace, NodePathUtils, type NodeWorkspaceOptions } from './workspace'
 export { NodeConfigProvider, type NodeConfigOptions } from './config'
 
+import * as path from 'path'
+import * as os from 'os'
+import * as fs from 'fs'
 import { NodeFileSystem } from './file-system'
 import { NodeStorage, NodeStorageOptions } from './storage'
 import { NodeEventBus } from './event-bus'
@@ -33,6 +36,12 @@ export function createNodeDependencies(options: {
   pathUtils: NodePathUtils
   configProvider: NodeConfigProvider
 } {
+  // Ensure global config directory exists
+  const globalConfigDir = path.join(os.homedir(), '.autodev-cache')
+  if (!fs.existsSync(globalConfigDir)) {
+    fs.mkdirSync(globalConfigDir, { recursive: true })
+  }
+
   const fileSystem = new NodeFileSystem()
   const storage = new NodeStorage(options.storageOptions)
   const eventBus = new NodeEventBus()
@@ -45,7 +54,14 @@ export function createNodeDependencies(options: {
   })
   
   const pathUtils = new NodePathUtils()
-  const configProvider = new NodeConfigProvider(fileSystem, eventBus, options.configOptions)
+  
+  // Configure global config path in config options
+  const configOptions = {
+    ...options.configOptions,
+    globalConfigPath: options.configOptions?.globalConfigPath || path.join(globalConfigDir, 'autodev-config.json')
+  }
+  
+  const configProvider = new NodeConfigProvider(fileSystem, eventBus, configOptions)
 
   return {
     fileSystem,

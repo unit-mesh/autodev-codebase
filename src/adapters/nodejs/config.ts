@@ -3,6 +3,7 @@
  * Implements IConfigProvider using JSON configuration files
  */
 import * as path from 'path'
+import * as os from 'os'
 import { IConfigProvider, EmbedderConfig, VectorStoreConfig, SearchConfig } from '../../abstractions/config'
 import { CodeIndexConfig, OllamaEmbedderConfig } from '../../code-index/interfaces/config'
 import { EmbedderProvider } from '../../code-index/interfaces/manager'
@@ -10,6 +11,7 @@ import { IFileSystem, IEventBus } from '../../abstractions/core'
 
 export interface NodeConfigOptions {
   configPath?: string
+  globalConfigPath?: string
   defaultConfig?: Partial<CodeIndexConfig>
   cliOverrides?: {
     ollamaUrl?: string
@@ -33,7 +35,9 @@ const DEFAULT_CONFIG: CodeIndexConfig = {
 
 export class NodeConfigProvider implements IConfigProvider {
   private configPath: string
+  private globalConfigPath: string
   private config: CodeIndexConfig | null = null
+  private configLoaded: boolean = false
   private changeCallbacks: Array<(config: CodeIndexConfig) => void> = []
   private cliOverrides: NodeConfigOptions['cliOverrides']
 
@@ -43,6 +47,7 @@ export class NodeConfigProvider implements IConfigProvider {
     options: NodeConfigOptions = {}
   ) {
     this.configPath = options.configPath || './autodev-config.json'
+    this.globalConfigPath = options.globalConfigPath || path.join(os.homedir(), '.autodev-cache', 'autodev-config.json')
     this.cliOverrides = options.cliOverrides
 
     // Set default configuration
@@ -53,7 +58,7 @@ export class NodeConfigProvider implements IConfigProvider {
   }
 
   async getEmbedderConfig(): Promise<EmbedderConfig> {
-    const config = await this.loadConfig()
+    const config = await this.ensureConfigLoaded()
     // Convert new config structure to legacy format for compatibility
     if (config.embedder.provider === "openai") {
       return {
@@ -92,7 +97,7 @@ export class NodeConfigProvider implements IConfigProvider {
   }
 
   async getVectorStoreConfig(): Promise<VectorStoreConfig> {
-    const config = await this.loadConfig()
+    const config = await this.ensureConfigLoaded()
     return {
       qdrantUrl: config.qdrantUrl,
       qdrantApiKey: config.qdrantApiKey
@@ -104,7 +109,7 @@ export class NodeConfigProvider implements IConfigProvider {
   }
 
   async getSearchConfig(): Promise<SearchConfig> {
-    const config = await this.loadConfig()
+    const config = await this.ensureConfigLoaded()
     return {
       minScore: config.searchMinScore,
       maxResults: 50 // Default max results
@@ -112,7 +117,7 @@ export class NodeConfigProvider implements IConfigProvider {
   }
 
   async getConfig(): Promise<CodeIndexConfig> {
-    return this.loadConfig()
+    return this.ensureConfigLoaded()
   }
 
   onConfigChange(callback: (config: CodeIndexConfig) => void): () => void {
@@ -128,43 +133,67 @@ export class NodeConfigProvider implements IConfigProvider {
   }
 
   /**
-   * Load configuration from file
+   * Ensure configuration is loaded (with caching)
+   */
+  private async ensureConfigLoaded(): Promise<CodeIndexConfig> {
+    if (!this.configLoaded) {
+      await this.loadConfig()
+    }
+    return this.config!
+  }
+
+  /**
+   * Force reload configuration from files (bypasses cache)
+   */
+  async reloadConfig(): Promise<CodeIndexConfig> {
+    this.configLoaded = false
+    return this.loadConfig()
+  }
+
+  /**
+   * Load configuration from file with global config support
    */
   async loadConfig(): Promise<CodeIndexConfig> {
-    // console.log(`Attempting to load config from: ${this.configPath}`)
+    // Start with default configuration
+    this.config = { ...DEFAULT_CONFIG }
+
+    // 1. Load global configuration if it exists
     try {
-      if (await this.fileSystem.exists(this.configPath)) {
-        const content = await this.fileSystem.readFile(this.configPath)
-        const text = new TextDecoder().decode(content)
-        const fileConfig = JSON.parse(text)
-
-
+      if (await this.fileSystem.exists(this.globalConfigPath)) {
+        const globalContent = await this.fileSystem.readFile(this.globalConfigPath)
+        const globalText = new TextDecoder().decode(globalContent)
+        const globalConfig = JSON.parse(globalText)
+        
+        // Merge global config with defaults
         this.config = {
-          ...DEFAULT_CONFIG,
-          ...fileConfig
+          ...this.config,
+          ...globalConfig
         }
-
-        // Apply CLI overrides
-        if (this.cliOverrides && this.config) {
-          if (this.cliOverrides.ollamaUrl && 'baseUrl' in this.config.embedder) {
-            this.config.embedder.baseUrl = this.cliOverrides.ollamaUrl
-          }
-          if (this.cliOverrides.model && this.cliOverrides.model.trim()) {
-            this.config.embedder.model = this.cliOverrides.model
-          }
-          if (this.cliOverrides.qdrantUrl) {
-            this.config.qdrantUrl = this.cliOverrides.qdrantUrl
-          }
-        }
-
-        // Auto-determine isConfigured based on provider requirements
-        this.config!.isConfigured = this.isConfigured()
+        // console.log(`Global config loaded from: ${this.globalConfigPath}`)
       }
     } catch (error) {
-      console.warn(`Failed to load config from ${this.configPath}:`, error)
+      console.warn(`Failed to load global config from ${this.globalConfigPath}:`, error)
     }
 
-    // Apply CLI overrides even if config file doesn't exist
+    // 2. Load project configuration if it exists
+    try {
+      if (await this.fileSystem.exists(this.configPath)) {
+        const projectContent = await this.fileSystem.readFile(this.configPath)
+        const projectText = new TextDecoder().decode(projectContent)
+        const projectConfig = JSON.parse(projectText)
+
+        // Merge project config with global config
+        this.config = {
+          ...this.config,
+          ...projectConfig
+        }
+        // console.log(`Project config loaded from: ${this.configPath}`)
+      }
+    } catch (error) {
+      console.warn(`Failed to load project config from ${this.configPath}:`, error)
+    }
+
+    // 3. Apply CLI overrides (highest priority)
     if (this.cliOverrides && this.config) {
       if (this.cliOverrides.ollamaUrl && 'baseUrl' in this.config.embedder) {
         this.config.embedder.baseUrl = this.cliOverrides.ollamaUrl
@@ -177,7 +206,12 @@ export class NodeConfigProvider implements IConfigProvider {
       }
     }
 
-    // console.log(`Current configuration:`, this.config, DEFAULT_CONFIG)
+    // Auto-determine isConfigured based on provider requirements
+    this.config!.isConfigured = this.isConfigured()
+
+    // Mark as loaded to enable caching
+    this.configLoaded = true
+
     return this.config || { ...DEFAULT_CONFIG }
   }
 
@@ -197,6 +231,7 @@ export class NodeConfigProvider implements IConfigProvider {
 
       await this.fileSystem.writeFile(this.configPath, encoded)
       this.config = newConfig
+      this.configLoaded = true // Mark as loaded since we just set it
 
       // Notify listeners
       this.changeCallbacks.forEach(callback => {
@@ -276,7 +311,7 @@ export class NodeConfigProvider implements IConfigProvider {
    * Validate configuration completeness
    */
   async validateConfig(): Promise<{ isValid: boolean; errors: string[] }> {
-    const config = await this.loadConfig()
+    const config = await this.ensureConfigLoaded()
     const errors: string[] = []
 
     if (!config.isEnabled) {
