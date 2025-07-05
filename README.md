@@ -167,11 +167,11 @@ Create a project-specific configuration file at `./autodev-config.json`:
 ```json
 {
   "embedder": {
-    provider: "openai-compatible",
-    apiKey: "sk-xxxxx",
-    baseUrl: "http://localhost:2302/v1",
-    model: "openai/text-embedding-3-smallnpm",
-    dimension: 1536,
+    "provider": "openai-compatible",
+    "apiKey": "sk-xxxxx",
+    "baseUrl": "http://localhost:2302/v1",
+    "model": "openai/text-embedding-3-smallnpm",
+    "dimension": 1536,
   },
   "qdrantUrl": "http://localhost:6334"
 }
