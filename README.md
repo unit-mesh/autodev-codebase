@@ -167,10 +167,10 @@ Create a project-specific configuration file at `./autodev-config.json`:
 ```json
 {
   "embedder": {
-    provider: 'openai-compatible',
-    apiKey: 'sk-xxxxx',
-    baseUrl: 'http://localhost:2302/v1',
-    model: 'openai/text-embedding-3-smallnpm',
+    provider: "openai-compatible",
+    apiKey: "sk-xxxxx",
+    baseUrl: "http://localhost:2302/v1",
+    model: "openai/text-embedding-3-smallnpm",
     dimension: 1536,
   },
   "qdrantUrl": "http://localhost:6334"
@@ -334,4 +334,3 @@ npm run mcp-server
 | lmstudio/nomic-ai/nomic-embed-text-v1.5-GGUF@Q4_K_M      | 768       | 16.7%       | 14.0%       | 0/10                  | 6/10                |
 | ollama/nomic-embed-text:f16                              | 768       | 16.7%       | 18.0%       | 0/10                  | 6/10                |
 | ollama/snowflake-arctic-embed2:568m:f16                  | 1024      | 16.7%       | 18.0%       | 0/10                  | 5/10                |
-
