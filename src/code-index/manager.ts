@@ -107,9 +107,10 @@ export class CodeIndexManager implements ICodeIndexManager {
 	/**
 	 * Initializes the manager with configuration and dependent services.
 	 * Must be called before using any other methods.
+	 * @param options Optional initialization options
 	 * @returns Object indicating if a restart is needed
 	 */
-	public async initialize(): Promise<{ requiresRestart: boolean }> {
+	public async initialize(options?: { force?: boolean }): Promise<{ requiresRestart: boolean }> {
 		// 1. ConfigManager Initialization and Configuration Loading
 		if (!this._configManager) {
 			this._configManager = new CodeIndexConfigManager(this.dependencies.configProvider)
@@ -186,6 +187,23 @@ export class CodeIndexManager implements ICodeIndexManager {
 				embedder,
 				vectorStore,
 			)
+
+			// Handle force clearing before reconciliation
+			if (options?.force) {
+				this.dependencies.logger?.info("Force mode enabled, clearing index data before reconciliation...")
+				
+				// Clear vector store
+				if (this.isFeatureConfigured) {
+					await vectorStore.deleteCollection()
+					await new Promise(resolve => setTimeout(resolve, 500))
+					await vectorStore.initialize()
+				}
+				
+				// Clear cache
+				await this._cacheManager.clearCacheFile()
+				
+				this.dependencies.logger?.info("Force clear completed, proceeding with reconciliation...")
+			}
 
 			// Add the new reconciliation step
 			await this.reconcileIndex(vectorStore, scanner)

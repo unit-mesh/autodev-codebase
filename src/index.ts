@@ -51,10 +51,18 @@ export async function main() {
     const { createTUIApp } = await import('./cli/tui-runner');
     const TUIApp = createTUIApp(options);
 
-    render(React.createElement(TUIApp), {
+    let renderConfig = {
       patchConsole: true,
       debug: false
-    });
+    }
+
+    // This will enable console patching and debug mode
+    // renderConfig = {
+    //   patchConsole: false,
+    //   debug: true
+    // }
+
+    render(React.createElement(TUIApp), renderConfig);
   }
 }
 if (process.argv[1] && process.argv[1].endsWith('index.ts')) {

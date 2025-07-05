@@ -107,28 +107,8 @@ export function createTUIApp(options: CliOptions) {
           }
 
           deps.logger?.info('[tui-runner]⚙️ Initializing CodeIndexManager...');
-          const initResult = await manager.initialize();
+          const initResult = await manager.initialize({ force: options.force });
           deps.logger?.info('[tui-runner]✅ CodeIndexManager initialization success:', initResult);
-
-          // Handle force option
-          if (options.force) {
-            deps.logger?.info('[tui-runner]🔄 Force mode enabled, clearing all index data...');
-            try {
-              if (manager.isFeatureEnabled && manager.isInitialized) {
-                await manager.clearIndexData();
-                deps.logger?.info('[tui-runner]✅ All index data cleared successfully');
-                
-                // Add a small delay to ensure cleanup is complete
-                await new Promise(resolve => setTimeout(resolve, 100));
-                deps.logger?.info('[tui-runner]⏳ Cleanup complete, ready for fresh indexing');
-              } else {
-                deps.logger?.warn('[tui-runner]⚠️ Cannot clear index data - feature not enabled or not initialized');
-              }
-            } catch (error: any) {
-              deps.logger?.error('[tui-runner]❌ Failed to clear index data:', error.message);
-              deps.logger?.warn('[tui-runner]⚠️ Continuing with normal startup...');
-            }
-          }
           deps.logger?.info('[tui-runner]📝 Manager state:', {
             isInitialized: manager.isInitialized,
             isFeatureEnabled: manager.isFeatureEnabled,
@@ -326,28 +306,8 @@ export async function startMCPServerMode(options: CliOptions): Promise<void> {
     }
 
     console.log('⚙️ Initializing CodeIndexManager...');
-    const initResult = await manager.initialize();
+    const initResult = await manager.initialize({ force: options.force });
     console.log('✅ CodeIndexManager initialization success');
-
-    // Handle force option
-    if (options.force) {
-      console.log('🔄 Force mode enabled, clearing all index data...');
-      try {
-        if (manager.isFeatureEnabled && manager.isInitialized) {
-          await manager.clearIndexData();
-          console.log('✅ All index data cleared successfully');
-          
-          // Add a small delay to ensure cleanup is complete
-          await new Promise(resolve => setTimeout(resolve, 100));
-          console.log('⏳ Cleanup complete, ready for fresh indexing');
-        } else {
-          console.warn('⚠️ Cannot clear index data - feature not enabled or not initialized');
-        }
-      } catch (error: any) {
-        console.error('❌ Failed to clear index data:', error.message);
-        console.warn('⚠️ Continuing with normal startup...');
-      }
-    }
 
     // Start MCP Server
     console.log('🚀 Starting MCP Server...');
